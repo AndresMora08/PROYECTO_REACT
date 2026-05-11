@@ -103,41 +103,20 @@ const UpdateUser: React.FC = () => {
 
         try {
 
-            const updatedUser =
-                await userService.updateUser(
-                    Number(id),
-                    {
+           const updatedUser = await userService.updateUser(Number(id), {
+    email:          formData.email,
+    code:           formData.code,
+    password:       formData.password,
+    first_name:     formData.firstName,    // ✅ snake_case
+    last_name:      formData.lastName,     // ✅ snake_case
+    identification: formData.identification,
+    ...(user?.role === "TEACHER" ? {
+        phone:      formData.phone,
+        specialty:  formData.speciality    // ✅ sin i
+    } : {})
 
-                        email:
-                            formData.email,
-
-                        code:
-                            formData.code,
-
-                        password:
-                            formData.password,
-
-                        firstName:
-                            formData.firstName,
-
-                        lastName:
-                            formData.lastName,
-
-                        identification:
-                            formData.identification,
-
-                        ...(user?.role === "TEACHER"
-                            ? {
-                                phone:
-                                    formData.phone,
-
-                                speciality:
-                                    formData.speciality
-                            }
-                            : {})
-
-                    }
-                );
+}as any
+);
 
             if (updatedUser) {
 
@@ -219,41 +198,19 @@ const UpdateUser: React.FC = () => {
             {/* FORM */}
             <GenericForm
 
-                initialValues={{
+            initialValues={{
+                  email:          user.email,
+                     code:           user.code,
+                        password:       "",
+                            firstName:      (user as any).first_name  || user.firstName,
+                                 lastName:       (user as any).last_name   || user.lastName,
+                                     identification: (user as any).identification,
 
-                    email:
-                        user.email,
-
-                    code:
-                        user.code,
-
-                    password:
-                        user.password,
-
-                    firstName:
-                        user.firstName,
-
-                    lastName:
-                        user.lastName,
-
-                    identification:
-                        user.identification,
-
-                    ...(user.role === "TEACHER"
-                        ? {
-
-                            phone:
-                                (user as Teacher)
-                                    .phone,
-
-                            speciality:
-                                (user as Teacher)
-                                    .speciality
-
-                        }
-                        : {})
-
-                }}
+                                ...(user.role === "TEACHER" ? {
+                                      phone:      (user as any).phone,
+                                     speciality: (user as any).specialty   // ← backend devuelve "specialty" sin i
+    } : {})
+}}
 
                 fields={[
 

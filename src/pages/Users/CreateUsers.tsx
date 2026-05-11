@@ -36,6 +36,7 @@ const CreateUser: React.FC = () => {
     const handleBaseSubmit = (
         formData: Record<string, any>
     ) => {
+        console.log("Base User Data:", formData);
 
         setBaseUserData({
 
@@ -62,7 +63,8 @@ const CreateUser: React.FC = () => {
     const handleProfileSubmit = async (
         formData: Record<string, any>
     ) => {
-
+        console.log("📋 PASO 2 - baseUserData:", baseUserData); // ← agrega esto
+      console.log("📋 PASO 2 - formData:", formData);
         try {
 
             // =============================================
@@ -115,9 +117,12 @@ const CreateUser: React.FC = () => {
                     await userService
                         .registerStudent(
                             student
+                            
                         );
 
-                if (response) {
+                console.log("Respuesta del servicio:", response); // ← agrega esto
+
+                
 
                     Swal.fire({
                         icon: "success",
@@ -129,7 +134,7 @@ const CreateUser: React.FC = () => {
 
                     navigate("/users/list");
 
-                }
+                
 
             }
 
@@ -187,7 +192,7 @@ const CreateUser: React.FC = () => {
                             teacher
                         );
 
-                if (response?.id) {
+                
 
                     Swal.fire({
                         icon: "success",
@@ -199,7 +204,7 @@ const CreateUser: React.FC = () => {
 
                     navigate("/users/list");
 
-                }
+                
 
             }
 

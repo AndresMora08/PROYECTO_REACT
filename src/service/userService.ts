@@ -1,17 +1,16 @@
+
+
 import axios from "axios";
 
 import { User } from "../models/User";
 import { Teacher } from "../models/Docente";
 import { Student } from "../models/Estudiante";
 
-// =====================================================
-// 🔹 URL BASE
-// =====================================================
 
-const API_URL =
-    import.meta.env.VITE_API_URL + "/api/users";
+const API_URL = "http://127.0.0.1:5000/api/users";
 
 class UserService {
+    // ... resto igual
 
     // =====================================================
     // 🔹 OBTENER TODOS
@@ -20,25 +19,17 @@ async getUsers(): Promise<User[]> {
 
     try {
 
-        const response =
-            await axios.get(
-                `${API_URL}`
-            );
+        const response = await axios.get("http://127.0.0.1:5000/api/users");
 
-        console.log(
-            "RESPONSE:",
-            response.data
-        );
+        console.log("FULL RESPONSE:", response);
+        console.log("DATA:", response.data);
 
-        // 🔹 Retornar el arreglo real
-        return response.data.data || [];
+        // ✔️ MISMA LÓGICA QUE YA FUNCIONA PERO SEGURA
+        return response.data.data ?? [];
 
     } catch (error) {
 
-        console.error(
-            "Error al obtener usuarios:",
-            error
-        );
+        console.error("Error al obtener usuarios:", error);
 
         return [];
 
@@ -50,129 +41,68 @@ async getUsers(): Promise<User[]> {
     // 🔹 OBTENER POR ID
     // =====================================================
 
-    async getUserById(
-        id: number
-    ): Promise<User | null> {
-
-        try {
-
-            const response =
-                await axios.get<User>(
-                    `${API_URL}/${id}`
-                );
-
-            return response.data;
-
-        } catch (error) {
-
-            console.error(
-                "Usuario no encontrado:",
-                error
-            );
-
-            return null;
-
-        }
-
+   async getUserById(id: number): Promise<User | null> {
+    try {
+        const response = await axios.get<any>(
+            `http://127.0.0.1:5000/api/users/${id}`
+        );
+        // ✅ igual que getUsers
+        console.log("RESPONSE COMPLETO:", response);        // ← agrega
+        console.log("RESPONSE.DATA:", response.data);       // ← agrega
+        console.log("RESPONSE.DATA.DATA:", response.data.data); //
+        return response.data.data ?? response.data;
+    } catch (error) {
+        console.error("Usuario no encontrado:", error);
+        console.error("Error al obtener usuario por ID:", error);
+        return null;
     }
+}
 
     // =====================================================
     // 🔹 REGISTRAR DOCENTE
     // =====================================================
 
-    async registerTeacher(
-        teacher: Omit<Teacher, "id">
-    ): Promise<Teacher | null> {
+   async registerStudent(
+    student: Omit<Student, "id">
+): Promise<Student | null> {
 
-        try {
-
-            const response =
-                await axios.post<Teacher>(
-
-                    `${API_URL}/public/register-teacher`,
-
-                    {
-
-                        email:
-                            teacher.email,
-
-                        password:
-                            teacher.password,
-
-                        code:
-                            teacher.code,
-
-                        role:
-                            teacher.role,
-
-                        first_name:
-                            teacher.firstName,
-
-                        last_name:
-                            teacher.lastName,
-
-                        identification:
-                            teacher.identification,
-
-                        phone:
-                            teacher.phone,
-
-                        specialty:
-                            teacher.speciality
-
-                    }
-
-                );
-
-            return response.data;
-
-        } catch (error) {
-
-            console.error(
-                "Error al registrar docente:",
-                error
-            );
-
-            return null;
-
+    // Sin try/catch → el error sube al Swal de CreateUser
+    const response = await axios.post<Student>(
+        `${API_URL}/public/register-student`,
+        {
+            email:          student.email,
+            password:       student.password,
+            code:           student.code,
+            role:           student.role,
+            first_name:     student.firstName,   // ✅ snake_case
+            last_name:      student.lastName,    // ✅ snake_case
+            identification: student.identification
         }
+    );
 
-    }
+    return response.data;
+}
 
-    // =====================================================
-    // 🔹 REGISTRAR ESTUDIANTE
-    // =====================================================
+async registerTeacher(
+    teacher: Omit<Teacher, "id">
+): Promise<Teacher | null> {
 
-    async registerStudent(student: Omit<Student, "id">): Promise<Student | null> {
+    const response = await axios.post<Teacher>(
+        `${API_URL}/public/register-teacher`,
+        {
+            email:          teacher.email,
+            password:       teacher.password,
+            code:           teacher.code,
+            role:           teacher.role,
+            first_name:     teacher.firstName,   // ✅ snake_case
+            last_name:      teacher.lastName,    // ✅ snake_case
+            identification: teacher.identification,
+            phone:          teacher.phone,
+            specialty:      teacher.speciality   // ✅ sin "i" al final
+        }
+    );
 
-    try {
-
-        const response = await axios.post<Student>(
-
-            `${API_URL}/public/register-student`,
-
-            {
-                email: student.email,
-                password: student.password,
-                code: student.code,
-                role: student.role,
-                first_name: student.firstName,
-                last_name: student.lastName,
-                identification: student.identification
-            }
-
-        );
-
-        // ✔️ CAMBIO AQUÍ (más seguro)
-        return response.data ?? null;
-
-    } catch (error) {
-
-        console.error("Error al registrar estudiante:", error);
-
-        return null;
-
-    }
+    return response.data;
 }
 
     // =====================================================
@@ -189,7 +119,7 @@ async getUsers(): Promise<User[]> {
         const response =
             await axios.put<User>(
 
-                `${API_URL}/${id}`,
+                `${"http://127.0.0.1:5000"}/api/users/${id}`,
 
                 user
 
@@ -221,7 +151,7 @@ async getUsers(): Promise<User[]> {
         try {
 
             await axios.delete(
-                `${API_URL}/${id}`
+                `${"http://127.0.0.1:5000"}/api/users/${id}`
             );
 
             return true;
@@ -257,7 +187,7 @@ async getUsers(): Promise<User[]> {
 
             const response =
                 await axios.get(
-                    `${API_URL}/search`,
+                    `${"http://127.0.0.1:5000"}/api/users/search`,
                     {
                         params
                     }
@@ -301,7 +231,7 @@ async getUsers(): Promise<User[]> {
         try {
 
             await axios.patch(
-                `${API_URL}/${id}/deactivate`
+                `${"http://127.0.0.1:5000"}/api/users/${id}/deactivate`
             );
 
             return true;

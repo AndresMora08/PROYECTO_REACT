@@ -41,8 +41,19 @@ const GenericForm: React.FC<GenericFormProps> = ({
     initialValues = {}
 }) => {
 
-    const [formData, setFormData] = useState<Record<string, any>>(initialValues);
-
+   const [formData, setFormData] = useState<Record<string, any>>(() => {
+    const defaults: Record<string, any> = { ...initialValues };
+    fields.forEach((field) => {
+        if (
+            field.type === "select" &&
+            field.options?.length &&
+            !defaults[field.name]
+        ) {
+            defaults[field.name] = field.options[0]; // arranca con "STUDENT"
+        }
+    });
+    return defaults;
+});
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
@@ -93,9 +104,14 @@ const GenericForm: React.FC<GenericFormProps> = ({
     };
 
     // 🔹 SUBMIT CON VALIDACIÓN FINAL
-    const handleSubmit = async (e: React.FormEvent) => {
+   const handleSubmit = async (e: React.FormEvent) => {
 
-        e.preventDefault();
+    e.preventDefault();
+
+    
+    const hasEmail = fields.some((f) => f.name === "email");
+
+    if (hasEmail) {
 
         try {
 
@@ -103,17 +119,19 @@ const GenericForm: React.FC<GenericFormProps> = ({
 
             setErrors({});
 
-            onSubmit(formData);
-
         } catch (err: any) {
 
-            setErrors({
-                email: err.message
-            });
+            setErrors({ email: err.message });
+
+            return; // ← detener si hay error de email
 
         }
 
-    };
+    }
+
+    onSubmit(formData); // ✅ Siempre llega aquí si no hay errores
+
+};
 
     return (
 

@@ -52,11 +52,7 @@ const Users: React.FC = () => {
     // 🔹 BUSCADOR REACTIVO
     // =====================================================
 
-    useEffect(() => {
-
-        handleSearch(search);
-
-    }, [search]);
+    
 
     // =====================================================
     // 🔹 OBTENER USUARIOS
@@ -107,50 +103,7 @@ const Users: React.FC = () => {
     // 🔹 BUSCAR
     // =====================================================
 
-    const handleSearch = async (
-        text: string
-    ) => {
-
-        try {
-
-            // 🔹 Vacío
-            if (!text.trim()) {
-
-                fetchData();
-
-                return;
-
-            }
-
-            // 🔹 Buscar
-            const response =
-                await userService.searchUsers({
-
-                    first_name: text,
-
-                    code: text,
-
-                    identification: text
-
-                });
-
-            // 🔹 Validar array
-            const users =
-                Array.isArray(response)
-                    ? response
-                    : [];
-
-            setData(users);
-
-        } catch (error) {
-
-            console.error(error);
-
-            setData([]);
-
-        }
-
-    };
+   
 
     // =====================================================
     // 🔹 ACCIONES
@@ -282,7 +235,16 @@ const Users: React.FC = () => {
         );
 
     }
-
+const filtered = data.filter((item: any) => {
+    const text = search.toLowerCase();
+    if (!text) return true;
+    return (
+        item.first_name?.toLowerCase().includes(text) ||
+        item.last_name?.toLowerCase().includes(text) ||
+        item.code?.toLowerCase().includes(text) ||
+        item.email?.toLowerCase().includes(text)
+    );
+});
     return (
 
         <div className="space-y-5">
@@ -334,14 +296,8 @@ const Users: React.FC = () => {
             <SearchInput
 
                 label="Buscar usuario"
-
-                placeholder="
-                    Buscar por nombre,
-                    código o identificación...
-                "
-
+                placeholder="Buscar por nombre, código o email..."
                 value={search}
-
                 onChange={setSearch}
 
             />
@@ -349,7 +305,7 @@ const Users: React.FC = () => {
             {/* TABLA */}
             <GenericTable
 
-                data={data.map((item: any) => ({
+                data={filtered.map((item: any) => ({
 
                     id: item.id,
 
@@ -370,9 +326,9 @@ const Users: React.FC = () => {
                             ? "Activo"
                             : "Inactivo",
 
-                    createdAt:
-                        item.createdAt ||
-                        "Sin fecha"
+                    createdAt: item.created_at
+                        ? new Date(item.created_at).toLocaleString()
+                        : "Sin fecha",
 
                 }))}
 
