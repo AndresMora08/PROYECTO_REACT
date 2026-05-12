@@ -1,5 +1,23 @@
 import { lazy } from "react";
 
+const AdminHub = lazy(() => import("../pages/Admin/AdminHub"));
+const UsersManagement = lazy(() => import("../pages/Admin/UsersManagement"));
+const CareersSemestersManagement = lazy(
+    () => import("../pages/Admin/CareersSemestersManagement")
+);
+const StudyPlanManagement = lazy(
+    () => import("../pages/Admin/StudyPlanManagement")
+);
+const MatriculasManagement = lazy(
+    () => import("../pages/Admin/MatriculasManagement")
+);
+const InscripcionesManagement = lazy(
+    () => import("../pages/Admin/InscripcionesManagement")
+);
+const RubricasManagement = lazy(
+    () => import("../pages/Admin/RubricasManagement")
+);
+
 // ======================================================
 // 🔹 USERS
 // ======================================================
@@ -25,6 +43,76 @@ const UserUpdate = lazy(
 // ======================================================
 
 const coreRoutes = [
+
+    // =========================================
+    // 🔹 ADMIN HUB
+    // =========================================
+
+    {
+        path: "/admin",
+        title: "Panel Administrativo",
+        component: AdminHub,
+    },
+
+    // =========================================
+    // 🔹 ADMIN - USUARIOS
+    // =========================================
+
+    {
+        path: "/admin/users",
+        title: "Gestionar Usuarios",
+        component: UsersManagement,
+    },
+
+    // =========================================
+    // 🔹 ADMIN - CARRERAS Y SEMESTRES
+    // =========================================
+
+    {
+        path: "/admin/careers-semesters",
+        title: "Carreras y Semestres",
+        component: CareersSemestersManagement,
+    },
+
+    // =========================================
+    // 🔹 ADMIN - PLAN DE ESTUDIOS
+    // =========================================
+
+    {
+        path: "/admin/study-plan",
+        title: "Plan de Estudios",
+        component: StudyPlanManagement,
+    },
+
+    // =========================================
+    // 🔹 ADMIN - MATRICULAS
+    // =========================================
+
+    {
+        path: "/admin/matriculas",
+        title: "Matricular Estudiante",
+        component: MatriculasManagement,
+    },
+
+    // =========================================
+    // 🔹 ADMIN - INSCRIPCIONES
+    // =========================================
+
+    {
+        path: "/admin/inscripciones",
+        title: "Inscribir Estudiante en Grupo",
+        component: InscripcionesManagement,
+    },
+
+    // =========================================
+    // 🔹 ADMIN - RUBRICAS
+    // =========================================
+
+    {
+        path: "/admin/rubricas",
+        title: "Crear Rúbrica",
+        component: RubricasManagement,
+    },
 
     // =========================================
     // 🔹 LISTA USUARIOS

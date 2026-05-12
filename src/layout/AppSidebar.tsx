@@ -27,6 +27,19 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
+    icon: <BoxCubeIcon />,
+    name: "Administración",
+    subItems: [
+      { name: "Panel", path: "/admin", pro: false },
+      { name: "Usuarios", path: "/admin/users", pro: false },
+      { name: "Carreras y semestres", path: "/admin/careers-semesters", pro: false },
+      { name: "Plan de estudios", path: "/admin/study-plan", pro: false },
+      { name: "Matrículas", path: "/admin/matriculas", pro: false },
+      { name: "Inscripciones", path: "/admin/inscripciones", pro: false },
+      { name: "Rúbricas", path: "/admin/rubricas", pro: false },
+    ],
+  },
+  {
     icon: <GridIcon />,
     name: "Dashboard",
     subItems: [{ name: "Ecommerce", path: "/", pro: false }],
