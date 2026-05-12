@@ -19,6 +19,7 @@ type GroupRecord = {
   teacher: string;
   capacity: number;
   enrolled: number;
+  credits: number;
 };
 
 type EnrollmentRecord = {
@@ -54,6 +55,7 @@ const groupsCatalog: GroupRecord[] = [
     teacher: "Dra. Alvarez",
     capacity: 30,
     enrolled: 22,
+    credits: 4,
   },
   {
     id: "g-2",
@@ -67,6 +69,7 @@ const groupsCatalog: GroupRecord[] = [
     teacher: "Ing. Torres",
     capacity: 25,
     enrolled: 25,
+    credits: 4,
   },
   {
     id: "g-3",
@@ -80,6 +83,7 @@ const groupsCatalog: GroupRecord[] = [
     teacher: "Lic. Pérez",
     capacity: 28,
     enrolled: 12,
+    credits: 3,
   },
   {
     id: "g-4",
@@ -93,6 +97,7 @@ const groupsCatalog: GroupRecord[] = [
     teacher: "Lic. Gómez",
     capacity: 30,
     enrolled: 18,
+    credits: 3,
   },
 ];
 
@@ -103,6 +108,9 @@ const InscripcionesManagement: React.FC = () => {
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [records, setRecords] = useState<EnrollmentRecord[]>([]);
+  const [creditsExceeded, setCreditsExceeded] = useState(false);
+  const [subjectNotInPlan, setSubjectNotInPlan] = useState<string[]>([]);
+  const CREDIT_LIMIT = 21;
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -118,6 +126,25 @@ const InscripcionesManagement: React.FC = () => {
   const students = useMemo(() => {
     return users.filter((user) => String(user.role ?? "").toUpperCase() === "STUDENT");
   }, [users]);
+
+  // Validación E1: Calcular suma de créditos (E1)
+  const calculateTotalCredits = (groupIds: string[]): number => {
+    return groupIds.reduce((sum, groupId) => {
+      const group = groupsCatalog.find((g) => g.id === groupId);
+      return sum + (group?.credits ?? 0);
+    }, 0);
+  };
+
+  // Validación E2: Verificar si hay cupo disponible
+  const hasCapacity = (group: GroupRecord): boolean => {
+    return group.enrolled < group.capacity;
+  };
+
+  // Validación E4: Verificar si la asignatura pertenece al plan de carrera
+  const isSubjectInPlan = (subjectCode: string, careerName: string): boolean => {
+    const allowedSubjects = planByCareer[careerName] ?? [];
+    return allowedSubjects.includes(subjectCode);
+  };
 
   const filteredStudents = useMemo(() => {
     const text = studentSearch.toLowerCase();
@@ -174,10 +201,11 @@ const InscripcionesManagement: React.FC = () => {
         (record) => record.studentId === Number(selectedStudentId) && record.groupId === group.id && record.status === "activa"
       );
 
+      // Solo mostrar grupos del semestre activo, de la carrera correcta, sin duplicados
+      // E2: No filtrar por cupo aún (lo mostraremos en UI), solo validar en create
       return (
         group.semesterState === "activo" &&
         group.careerName === activeEnrollment.careerName &&
-        allowedSubjects.includes(group.subjectCode) &&
         noDuplicate
       );
     });
@@ -193,12 +221,6 @@ const InscripcionesManagement: React.FC = () => {
     );
   };
 
-  const hasDuplicateEnrollment = (studentId: number, groupId: string) => {
-    return records.some(
-      (record) => record.studentId === studentId && record.groupId === groupId && record.status === "activa"
-    );
-  };
-
   const handleCreateEnrollment = () => {
     if (!selectedStudent) {
       Swal.fire({
@@ -209,6 +231,7 @@ const InscripcionesManagement: React.FC = () => {
       return;
     }
 
+    // Excepción E3: El estudiante no tiene Matricula activa
     const matricula = selectedStudent.matriculas?.find((item: any) => {
       const status = String(item.estado ?? item.status ?? "").toLowerCase();
       return status === "activa" || status === "active" || status === "activo";
@@ -218,7 +241,9 @@ const InscripcionesManagement: React.FC = () => {
       Swal.fire({
         icon: "error",
         title: "Sin matrícula activa",
-        text: "Solo se puede inscribir un estudiante con matrícula activa en una carrera.",
+        text: "El estudiante debe tener una matrícula activa en una carrera para inscribirse en grupos. Redirige a Matrículas.",
+      }).then(() => {
+        window.location.href = "/admin/matriculas";
       });
       return;
     }
@@ -239,37 +264,88 @@ const InscripcionesManagement: React.FC = () => {
       matricula.carreraId ??
       "";
 
-    const invalidGroups = selectedGroupIds.filter((groupId) => {
+    // Validar cada grupo seleccionado
+    const groupsToInscribe: GroupRecord[] = [];
+    const groupsWithoutCapacity: GroupRecord[] = [];
+    const groupsNotInPlan: GroupRecord[] = [];
+
+    for (const groupId of selectedGroupIds) {
       const group = groupsCatalog.find((item) => item.id === groupId);
-      if (!group) return true;
+      if (!group) continue;
 
-      const allowedSubjects = planByCareer[selectedCareerName] ?? [];
-      const groupBelongsToPlan = allowedSubjects.includes(group.subjectCode);
-      const sameCareer = group.careerName === selectedCareerName;
-      const activeSemester = group.semesterState === "activo";
-      const duplicate = hasDuplicateEnrollment(Number(selectedStudent.id), groupId);
+      // Excepción E2: Grupo sin cupo disponible
+      if (!hasCapacity(group)) {
+        groupsWithoutCapacity.push(group);
+      }
 
-      return !groupBelongsToPlan || !sameCareer || !activeSemester || duplicate;
-    });
+      // Excepción E4: La asignatura no pertenece al plan
+      if (!isSubjectInPlan(group.subjectCode, selectedCareerName)) {
+        groupsNotInPlan.push(group);
+      } else {
+        groupsToInscribe.push(group);
+      }
+    }
 
-    if (invalidGroups.length > 0) {
+    // Manejando E2: Si hay grupos sin cupo
+    if (groupsWithoutCapacity.length > 0) {
+      const groupNames = groupsWithoutCapacity.map((g) => g.code).join(", ");
       Swal.fire({
-        icon: "error",
-        title: "Grupos no válidos",
-        text:
-          "Uno o más grupos no pertenecen al plan de estudios, no están activos o ya fueron inscritos.",
+        icon: "warning",
+        title: "Sin cupo disponible",
+        text: `Los grupos ${groupNames} no tienen cupo disponible.`,
       });
       return;
     }
 
-    const newRecords: EnrollmentRecord[] = selectedGroupIds.map((groupId) => {
+    // Excepción E1: Suma de créditos excede el límite
+    const totalCredits = calculateTotalCredits(selectedGroupIds);
+    if (totalCredits > CREDIT_LIMIT) {
+      Swal.fire({
+        icon: "error",
+        title: "Límite de créditos excedido",
+        text: `La suma de créditos (${totalCredits}) excede el límite permitido (${CREDIT_LIMIT}).`,
+      });
+      return;
+    }
+
+    // Excepción E4: Advertencia si hay asignaturas fuera del plan
+    if (groupsNotInPlan.length > 0) {
+      const notInPlanNames = groupsNotInPlan.map((g) => g.code).join(", ");
+      Swal.fire({
+        icon: "warning",
+        title: "Asignaturas no en plan",
+        text: `Los grupos ${notInPlanNames} no pertenecen al plan de estudios de la carrera. ¿Deseas continuar de todas formas?`,
+        showCancelButton: true,
+        confirmButtonText: "Sí, continuar",
+        cancelButtonText: "Cancelar",
+      }).then((result) => {
+        if (!result.isConfirmed) {
+          return;
+        }
+
+        // Si el usuario confirma, inscribir todos (incluso los fuera del plan)
+        createInscriptions(selectedGroupIds, selectedStudent, selectedCareerName);
+      });
+      return;
+    }
+
+    // Si todo está correcto, crear inscripciones
+    createInscriptions(selectedGroupIds, selectedStudent, selectedCareerName);
+  };
+
+  const createInscriptions = (
+    groupIds: string[],
+    student: AdminUser,
+    careerName: string
+  ) => {
+    const newRecords: EnrollmentRecord[] = groupIds.map((groupId) => {
       const group = groupsCatalog.find((item) => item.id === groupId)!;
 
       return {
-        id: `${selectedStudent.id}-${groupId}-${Date.now()}`,
-        studentId: Number(selectedStudent.id),
-        studentName: `${selectedStudent.first_name ?? ""} ${selectedStudent.last_name ?? ""}`.trim() || "Sin nombre",
-        studentEmail: String(selectedStudent.email ?? ""),
+        id: `${student.id}-${groupId}-${Date.now()}`,
+        studentId: Number(student.id),
+        studentName: `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() || "Sin nombre",
+        studentEmail: String(student.email ?? ""),
         groupId,
         groupCode: group.code,
         subjectName: group.subjectName,
@@ -282,11 +358,14 @@ const InscripcionesManagement: React.FC = () => {
 
     setRecords((current) => [...current, ...newRecords]);
     setSelectedGroupIds([]);
+    setCreditsExceeded(false);
+    setSubjectNotInPlan([]);
 
+    const totalCredits = calculateTotalCredits(groupIds);
     Swal.fire({
       icon: "success",
       title: "Inscripción creada",
-      text: "El estudiante quedó vinculado a los grupos seleccionados.",
+      text: `El estudiante quedó vinculado a ${groupIds.length} grupo(s) (${totalCredits} créditos).`,
     });
   };
 
@@ -391,6 +470,9 @@ const InscripcionesManagement: React.FC = () => {
               <p className="mt-1 text-sm text-gray-500">
                 Carrera activa: {activeEnrollment?.careerName ?? "Sin matrícula activa"}
               </p>
+              <p className="mt-1 text-sm text-gray-500">
+                Período: {activeEnrollment?.period ?? "-"}
+              </p>
             </div>
           ) : (
             <p className="mt-4 text-sm text-gray-500">
@@ -398,31 +480,76 @@ const InscripcionesManagement: React.FC = () => {
             </p>
           )}
 
-          <div className="mt-4 space-y-3">
-            {eligibleGroups.map((group) => (
-              <label
-                key={group.id}
-                className="flex items-start gap-3 rounded-xl border border-stroke p-4 dark:border-strokedark"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedGroupSet.has(group.id)}
-                  onChange={() => toggleGroup(group.id)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <p className="font-semibold text-black dark:text-white">
-                    {group.code} - {group.subjectName}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {group.careerName} | Semestre {group.semester} | {group.teacher}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Cupo: {group.enrolled}/{group.capacity}
-                  </p>
+          <div className="mt-4 rounded-xl border border-stroke bg-gray-1 p-4 dark:border-strokedark dark:bg-meta-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Créditos seleccionados</p>
+                <p className="text-2xl font-bold text-black dark:text-white">
+                  {calculateTotalCredits(selectedGroupIds)}/{CREDIT_LIMIT}
+                </p>
+              </div>
+              {calculateTotalCredits(selectedGroupIds) > CREDIT_LIMIT && (
+                <div className="rounded-lg bg-red-100 px-3 py-1 text-sm font-semibold text-red-600">
+                  Excedido
                 </div>
-              </label>
-            ))}
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {eligibleGroups.map((group) => {
+              const hasNoCapacity = !hasCapacity(group);
+              const isSubjectOutOfPlan = !isSubjectInPlan(group.subjectCode, activeEnrollment?.careerName ?? "");
+
+              return (
+                <label
+                  key={group.id}
+                  className={`flex items-start gap-3 rounded-xl border p-4 ${
+                    hasNoCapacity
+                      ? "border-red-300 bg-red-50 opacity-60 dark:border-red-500 dark:bg-red-900"
+                      : "border-stroke dark:border-strokedark"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedGroupSet.has(group.id) && !hasNoCapacity}
+                    onChange={() => !hasNoCapacity && toggleGroup(group.id)}
+                    disabled={hasNoCapacity}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="font-semibold text-black dark:text-white">
+                      {group.code} - {group.subjectName}
+                      {isSubjectOutOfPlan && (
+                        <span className="ml-2 inline-block rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-700 dark:text-yellow-100">
+                          Fuera del plan
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {group.careerName} | Semestre {group.semester} | {group.teacher}
+                    </p>
+                    <div className="mt-1 flex items-center gap-3">
+                      <p className="text-sm text-gray-500">
+                        Créditos: {group.credits}
+                      </p>
+                      <p className={`text-sm font-semibold ${
+                        hasNoCapacity
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-gray-500"
+                      }`}>
+                        Cupo: {group.enrolled}/{group.capacity}
+                        {hasNoCapacity && (
+                          <span className="ml-1 text-red-600 dark:text-red-400">
+                            (Sin cupo)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
 
             {selectedStudent && eligibleGroups.length === 0 && (
               <p className="rounded-xl border border-dashed border-stroke p-4 text-sm text-gray-500 dark:border-strokedark">
@@ -452,30 +579,45 @@ const InscripcionesManagement: React.FC = () => {
                 <th className="px-4 py-3">Estudiante</th>
                 <th className="px-4 py-3">Grupo</th>
                 <th className="px-4 py-3">Asignatura</th>
+                <th className="px-4 py-3">Créditos</th>
                 <th className="px-4 py-3">Carrera</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Acción</th>
               </tr>
             </thead>
             <tbody>
-              {records.map((record) => (
-                <tr key={record.id} className="border-b border-stroke dark:border-strokedark">
-                  <td className="px-4 py-3 text-black dark:text-white">{record.studentName}</td>
-                  <td className="px-4 py-3">{record.groupCode}</td>
-                  <td className="px-4 py-3">{record.subjectName}</td>
-                  <td className="px-4 py-3">{record.careerName}</td>
-                  <td className="px-4 py-3">{record.status}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => cancelEnrollment(record.id)}
-                      className="rounded-md border border-stroke px-3 py-1 text-sm"
-                    >
-                      Cancelar
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {records.map((record) => {
+                const group = groupsCatalog.find((g) => g.id === record.groupId);
+                return (
+                  <tr key={record.id} className="border-b border-stroke dark:border-strokedark">
+                    <td className="px-4 py-3 text-black dark:text-white">{record.studentName}</td>
+                    <td className="px-4 py-3">{record.groupCode}</td>
+                    <td className="px-4 py-3">{record.subjectName}</td>
+                    <td className="px-4 py-3">{group?.credits ?? "-"}</td>
+                    <td className="px-4 py-3">{record.careerName}</td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        record.status === "activa"
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100"
+                          : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-100"
+                      }`}>
+                        {record.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {record.status === "activa" && (
+                        <button
+                          type="button"
+                          onClick={() => cancelEnrollment(record.id)}
+                          className="rounded-md border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

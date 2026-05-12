@@ -22,7 +22,7 @@ type EnrollmentRecord = {
   careerId: string;
   careerName: string;
   period: string;
-  state: "activa" | "inactiva" | "retirada";
+  estado_academico: "activo" | "retirado" | "suspendido" | "en_riesgo";
   createdAt: string;
 };
 
@@ -53,7 +53,9 @@ const MatriculasManagement: React.FC = () => {
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [selectedCareerIds, setSelectedCareerIds] = useState<string[]>([]);
-  const [period, setPeriod] = useState("2026-1");
+  const [period, setPeriod] = useState("2026-P1");
+  const [periodError, setPeriodError] = useState("");
+  const [estado_academico, setEstado_academico] = useState<"activo" | "retirado" | "suspendido" | "en_riesgo">("activo");
   const [records, setRecords] = useState<EnrollmentRecord[]>([]);
 
   useEffect(() => {
@@ -94,7 +96,10 @@ const MatriculasManagement: React.FC = () => {
 
   const studentAlreadyHasCareer = (studentId: number, careerId: string) => {
     return records.some(
-      (record) => record.studentId === studentId && record.careerId === careerId && record.state === "activa"
+      (record) =>
+        record.studentId === studentId &&
+        record.careerId === careerId &&
+        record.estado_academico === "activo"
     );
   };
 
@@ -104,6 +109,35 @@ const MatriculasManagement: React.FC = () => {
         ? current.filter((item) => item !== careerId)
         : [...current, careerId]
     );
+  };
+
+  // Validar formato de período: YYYY-P# (ej: 2026-P1, 2026-P2)
+  const validatePeriod = (value: string): boolean => {
+    const periodRegex = /^\d{4}-P[1-3]$/;
+    return periodRegex.test(value);
+  };
+
+  const handlePeriodChange = (value: string) => {
+    setPeriod(value);
+    if (value && !validatePeriod(value)) {
+      setPeriodError("Formato inválido. Use: YYYY-P# (ej: 2026-P1)");
+    } else {
+      setPeriodError("");
+    }
+  };
+
+  const editEstadoAcademico = (recordId: string, newEstado: typeof estado_academico) => {
+    setRecords((current) =>
+      current.map((record) =>
+        record.id === recordId ? { ...record, estado_academico: newEstado } : record
+      )
+    );
+
+    Swal.fire({
+      icon: "success",
+      title: "Estado actualizado",
+      text: `El estado académico fue actualizado a "${newEstado}".`,
+    });
   };
 
   const handleCreateEnrollment = () => {
@@ -121,6 +155,16 @@ const MatriculasManagement: React.FC = () => {
         icon: "error",
         title: "Estudiante inactivo",
         text: "No se puede matricular un estudiante con la cuenta desactivada.",
+      });
+      return;
+    }
+
+    // Validar período (Excepción E2)
+    if (!period || !validatePeriod(period)) {
+      Swal.fire({
+        icon: "error",
+        title: "Periodo de ingreso inválido",
+        text: "El formato debe ser YYYY-P# (ej: 2026-P1, 2026-P2, 2026-P3).",
       });
       return;
     }
@@ -157,13 +201,16 @@ const MatriculasManagement: React.FC = () => {
         careerId,
         careerName: career?.nombre ?? careerId,
         period,
-        state: "activa",
+        estado_academico,
         createdAt: new Date().toISOString(),
       };
     });
 
     setRecords((current) => [...current, ...newRecords]);
     setSelectedCareerIds([]);
+    setEstado_academico("activo");
+    setPeriod("2026-P1");
+    setPeriodError("");
 
     Swal.fire({
       icon: "success",
@@ -175,9 +222,15 @@ const MatriculasManagement: React.FC = () => {
   const cancelEnrollment = (recordId: string) => {
     setRecords((current) =>
       current.map((record) =>
-        record.id === recordId ? { ...record, state: "inactiva" } : record
+        record.id === recordId ? { ...record, estado_academico: "retirado" } : record
       )
     );
+
+    Swal.fire({
+      icon: "success",
+      title: "Matrícula retirada",
+      text: "El estudiante ha sido retirado de esta carrera.",
+    });
   };
 
   if (loading) {
@@ -268,14 +321,38 @@ const MatriculasManagement: React.FC = () => {
 
           <div className="mt-4">
             <label className="mb-2 block text-sm font-medium text-black dark:text-white">
-              Periodo de ingreso
+              Periodo de ingreso (Ej: 2026-P1)
             </label>
             <input
               type="text"
               value={period}
-              onChange={(e) => setPeriod(e.target.value)}
-              className="w-full rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
+              onChange={(e) => handlePeriodChange(e.target.value)}
+              className={`w-full rounded-md border bg-transparent px-4 py-3 outline-none dark:bg-form-input dark:text-white ${
+                periodError
+                  ? "border-red-500 dark:border-red-500"
+                  : "border-stroke dark:border-strokedark"
+              }`}
+              placeholder="2026-P1"
             />
+            {periodError && (
+              <p className="mt-1 text-xs text-red-500">{periodError}</p>
+            )}
+          </div>
+
+          <div className="mt-4">
+            <label className="mb-2 block text-sm font-medium text-black dark:text-white">
+              Estado académico inicial
+            </label>
+            <select
+              value={estado_academico}
+              onChange={(e) => setEstado_academico(e.target.value as typeof estado_academico)}
+              className="w-full rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
+            >
+              <option value="activo">Activo</option>
+              <option value="retirado">Retirado</option>
+              <option value="suspendido">Suspendido</option>
+              <option value="en_riesgo">En Riesgo</option>
+            </select>
           </div>
 
           <div className="mt-4 space-y-3">
@@ -338,9 +415,9 @@ const MatriculasManagement: React.FC = () => {
                 <th className="px-4 py-3">Estudiante</th>
                 <th className="px-4 py-3">Carrera</th>
                 <th className="px-4 py-3">Periodo</th>
-                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">Estado Académico</th>
                 <th className="px-4 py-3">Creada</th>
-                <th className="px-4 py-3">Acción</th>
+                <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -349,15 +426,28 @@ const MatriculasManagement: React.FC = () => {
                   <td className="px-4 py-3 text-black dark:text-white">{record.studentName}</td>
                   <td className="px-4 py-3">{record.careerName}</td>
                   <td className="px-4 py-3">{record.period}</td>
-                  <td className="px-4 py-3">{record.state}</td>
-                  <td className="px-4 py-3">{new Date(record.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={record.estado_academico}
+                      onChange={(e) =>
+                        editEstadoAcademico(record.id, e.target.value as typeof estado_academico)
+                      }
+                      className="rounded border border-stroke bg-transparent px-2 py-1 text-sm outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
+                    >
+                      <option value="activo">Activo</option>
+                      <option value="retirado">Retirado</option>
+                      <option value="suspendido">Suspendido</option>
+                      <option value="en_riesgo">En Riesgo</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{new Date(record.createdAt).toLocaleString()}</td>
                   <td className="px-4 py-3">
                     <button
                       type="button"
                       onClick={() => cancelEnrollment(record.id)}
-                      className="rounded-md border border-stroke px-3 py-1 text-sm"
+                      className="rounded-md border border-red-500 px-3 py-1 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                     >
-                      Cancelar
+                      Retirar
                     </button>
                   </td>
                 </tr>

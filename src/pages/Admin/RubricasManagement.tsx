@@ -120,6 +120,16 @@ const RubricasManagement: React.FC = () => {
       return false;
     }
 
+    // Excepción E2: Rúbrica sin criterios
+    if (criterios.length === 0) {
+      Swal.fire({
+        icon: "error",
+        title: "Sin criterios",
+        text: "La rúbrica debe tener al menos un criterio para poder publicarse.",
+      });
+      return false;
+    }
+
     const validCriteria = criterios.filter(
       (criterion) =>
         criterion.nombre.trim() &&
@@ -137,25 +147,6 @@ const RubricasManagement: React.FC = () => {
       return false;
     }
 
-    if (criterios.length === 0) {
-      Swal.fire({
-        icon: "warning",
-        title: "Sin criterios",
-        text: "La rúbrica debe tener al menos un criterio.",
-      });
-      return false;
-    }
-
-    const sum = totalWeight;
-    if (strictWeightSum && sum !== 100) {
-      Swal.fire({
-        icon: "error",
-        title: "Suma inválida",
-        text: `La suma de pesos debe ser exactamente 100%. Actualmente es ${sum}%.`,
-      });
-      return false;
-    }
-
     const uniqueCriterionNames = new Set(
       criterios.map((criterion) => criterion.nombre.trim().toLowerCase())
     );
@@ -165,6 +156,22 @@ const RubricasManagement: React.FC = () => {
         icon: "warning",
         title: "Nombres duplicados",
         text: "No repitas el nombre de un criterio dentro de la misma rúbrica.",
+      });
+      return false;
+    }
+
+    // Excepción E1: Suma de pesos ≠ 100% cuando se intenta publicar
+    const sum = totalWeight;
+    if (strictWeightSum && sum !== 100) {
+      const diferencia = 100 - sum;
+      const texto = diferencia > 0 
+        ? `Faltan ${diferencia.toFixed(2)}% para completar 100%.`
+        : `Exceden en ${Math.abs(diferencia).toFixed(2)}% sobre 100%.`;
+      
+      Swal.fire({
+        icon: "error",
+        title: "Suma de pesos inválida",
+        text: `La suma actual es ${sum}%. ${texto} No se puede publicar hasta que sea exactamente 100%.`,
       });
       return false;
     }
@@ -305,15 +312,35 @@ const RubricasManagement: React.FC = () => {
         </div>
 
         <div className="mt-6 flex items-center justify-between gap-4 rounded-xl bg-gray-2 px-4 py-3 dark:bg-meta-4">
-          <p className="text-sm text-gray-600 dark:text-gray-200">
-            Peso total: <span className="font-semibold">{totalWeight}%</span>
-          </p>
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-200">
+              Peso total: <span className={`font-semibold ${
+                totalWeight === 100
+                  ? "text-green-600 dark:text-green-400"
+                  : totalWeight === 0
+                  ? "text-gray-600 dark:text-gray-400"
+                  : "text-red-600 dark:text-red-400"
+              }`}>{totalWeight}%</span>
+            </p>
+            {totalWeight !== 0 && totalWeight !== 100 && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {totalWeight < 100 
+                  ? `Faltan ${(100 - totalWeight).toFixed(2)}%` 
+                  : `Exceden ${(totalWeight - 100).toFixed(2)}%`}
+              </p>
+            )}
+            {totalWeight === 100 && (
+              <p className="text-xs text-green-600 dark:text-green-400">
+                ✓ Listo para publicar
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={addCriterion}
             className="rounded-md border border-stroke px-4 py-2 text-sm font-medium dark:border-strokedark"
           >
-            Agregar criterio
+            + Agregar criterio
           </button>
         </div>
 
@@ -384,24 +411,39 @@ const RubricasManagement: React.FC = () => {
           <button
             type="button"
             onClick={() => saveRubric("borrador")}
-            className="rounded-md border border-stroke px-4 py-2 text-sm font-medium dark:border-strokedark"
+            className="rounded-md border border-stroke px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:border-strokedark dark:hover:bg-meta-4"
           >
-            Guardar borrador
+            💾 Guardar como borrador
           </button>
           <button
             type="button"
             onClick={() => saveRubric("publicada")}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white"
+            disabled={totalWeight !== 100 || criterios.length === 0}
+            className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
+              totalWeight === 100 && criterios.length > 0
+                ? "bg-primary hover:bg-opacity-90"
+                : "cursor-not-allowed bg-gray-400 dark:bg-gray-600"
+            }`}
+            title={
+              criterios.length === 0
+                ? "Agrega al menos un criterio"
+                : totalWeight !== 100
+                ? `La suma debe ser 100% (actual: ${totalWeight}%)`
+                : "Publicar rúbrica"
+            }
           >
-            Publicar rúbrica
+            🚀 Publicar rúbrica
+            {totalWeight !== 100 && criterios.length > 0 && (
+              <span className="ml-1 text-xs">({totalWeight}%)</span>
+            )}
           </button>
           {editingId && (
             <button
               type="button"
               onClick={resetForm}
-              className="rounded-md border border-stroke px-4 py-2 text-sm font-medium dark:border-strokedark"
+              className="rounded-md border border-stroke px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:border-strokedark dark:hover:bg-meta-4"
             >
-              Cancelar edición
+              ✕ Cancelar edición
             </button>
           )}
         </div>
@@ -426,20 +468,40 @@ const RubricasManagement: React.FC = () => {
             <tbody>
               {rubricas.map((rubrica) => {
                 const total = rubrica.criterios.reduce((sum, criterio) => sum + criterio.peso, 0);
+                const isPublished = rubrica.estado === "publicada";
+                const isArchived = rubrica.estado === "archivada";
                 return (
                   <tr key={rubrica.id} className="border-b border-stroke dark:border-strokedark">
                     <td className="px-4 py-3 text-black dark:text-white">{rubrica.titulo}</td>
                     <td className="px-4 py-3">{rubrica.asignaturaNombre}</td>
                     <td className="px-4 py-3">{rubrica.criterios.length}</td>
-                    <td className="px-4 py-3">{total}%</td>
-                    <td className="px-4 py-3">{rubrica.estado}</td>
+                    <td className="px-4 py-3">
+                      <span className={`font-semibold ${
+                        total === 100
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}>
+                        {total}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        isPublished
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100"
+                          : isArchived
+                          ? "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                          : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-100"
+                      }`}>
+                        {isPublished ? "Publicada" : isArchived ? "Archivada" : "Borrador"}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {(rubrica.estado === "borrador" || rubrica.estado === "publicada") && (
                           <button
                             type="button"
                             onClick={() => editRubric(rubrica.id)}
-                            className="rounded-md border border-stroke px-3 py-1 text-xs font-medium dark:border-strokedark"
+                            className="rounded-md border border-stroke px-3 py-1 text-xs font-medium hover:bg-gray-100 dark:border-strokedark dark:hover:bg-meta-4"
                           >
                             Editar
                           </button>
@@ -448,16 +510,16 @@ const RubricasManagement: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => deleteDraft(rubrica.id)}
-                            className="rounded-md border border-stroke px-3 py-1 text-xs font-medium text-red-500 dark:border-strokedark"
+                            className="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900"
                           >
-                            Eliminar borrador
+                            Eliminar
                           </button>
                         )}
                         {rubrica.estado !== "archivada" && (
                           <button
                             type="button"
                             onClick={() => archiveRubric(rubrica.id)}
-                            className="rounded-md border border-stroke px-3 py-1 text-xs font-medium dark:border-strokedark"
+                            className="rounded-md border border-stroke px-3 py-1 text-xs font-medium hover:bg-gray-100 dark:border-strokedark dark:hover:bg-meta-4"
                           >
                             Archivar
                           </button>
