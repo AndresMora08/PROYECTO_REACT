@@ -1,15 +1,15 @@
 import { Grupo } from "./Grupo";
 import { PlanEstudio } from "./PlanEstudio";
 
-export interface Asignatura {
-  id: string;
-  nombre: string;
-  codigo: string;
-  descripcion?: string;
-  creditosBase: number;
-  activa: boolean;
-  createdAt: string;
-  updatedAt: string;
+export interface Subject {
+      id: string;
+    name: string;
+    code: string;
+    description?: string;
+    credits: number;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
   grupos?: Grupo[];
   planEstudio?:PlanEstudio;
 }

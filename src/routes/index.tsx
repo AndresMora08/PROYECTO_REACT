@@ -17,6 +17,9 @@ const InscripcionesManagement = lazy(
 const RubricasManagement = lazy(
     () => import("../pages/Admin/RubricasManagement")
 );
+const SubjectList = lazy(() => import("../pages/Asignaturas/ListAsignaturas"));
+const SubjectCreate = lazy(() => import("../pages/Asignaturas/CreateAsignaturas"));
+const SubjectUpdate = lazy(() => import("../pages/Asignaturas/UpdateAsignaturas"));
 
 // ======================================================
 // 🔹 USERS
@@ -143,6 +146,9 @@ const coreRoutes = [
         title: "Editar Usuario",
         component: UserUpdate,
     },
+    { path: "/subjects/list",        title: "Asignaturas",          component: SubjectList },
+    { path: "/subjects/create",      title: "Nueva Asignatura",     component: SubjectCreate },
+    { path: "/subjects/update/:id",  title: "Editar Asignatura",    component: SubjectUpdate },
 
 ];
 
