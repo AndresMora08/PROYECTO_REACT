@@ -1,10 +1,14 @@
-import { Asignatura } from "./Asignatura";
+/* ========================================================================================= */
+/* Modelo de Plan de Estudio                                                                 */
+/* ========================================================================================= */
+import { Subject } from "./Asignatura";
 import { Carrera } from "./Carrera";
 
 export enum EstadoPlan {
   VIGENTE = "vigente",
   HISTORICO = "historico",
-  ARCHIVADO = "archivado"
+  ARCHIVADO = "archivado",
+  BORRADOR = "borrador"
 }
 
 export interface AsignaturaPlan {
@@ -14,7 +18,9 @@ export interface AsignaturaPlan {
   creditos: number;
   esRequerida: boolean;
   createdAt: string;
-  asignatura?: Asignatura;
+  asignatura?: Subject;
+  // Auxiliar de UI para validación E1
+  tieneInscripcionesActivas?: boolean;
 }
 
 export interface VersionPlanEstudio {
@@ -40,18 +46,12 @@ export interface PlanEstudio {
   asignaturasVigentes?: AsignaturaPlan[];
 }
 
-export interface CrearPlanEstudioInput {
-  carreraId: string;
-  asignaturas: {
-    asignaturaId: string;
-    semestreSugerido: number;
-    creditos: number;
-    esRequerida: boolean;
-  }[];
-}
-
-export interface ActualizarAsignaturaPlanInput {
-  semestreSugerido?: number;
-  creditos?: number;
-  esRequerida?: boolean;
+export interface DetallesPlan {
+    carrera: string;
+    añoVersion: number;
+    estado: Boolean;
+    totalAsignaturas:number;
+    totalCreditos:number;
+    ultimaActualizacion:string;
+    actualizadoPor:string;
 }
