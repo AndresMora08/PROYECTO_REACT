@@ -13,45 +13,45 @@ export enum EstadoPlan {
 
 export interface AsignaturaPlan {
   id: string;
-  asignaturaId: string;
-  semestreSugerido: number;
-  creditos: number;
-  esRequerida: boolean;
-  createdAt: string;
-  asignatura?: Subject;
+  subject_id: string;
+  suggested_semester: number;
+  credits: number;
+  is_required: boolean;
+  created_at: string;
+  subject?: Subject;
   // Auxiliar de UI para validación E1
-  tieneInscripcionesActivas?: boolean;
+  has_active_enrollments?: boolean;
 }
 
 export interface VersionPlanEstudio {
   id: string;
-  planEstudioId: string;
-  numeroVersion: number;
-  estado: EstadoPlan;
-  fechaVigencia: string;
-  asignaturas: AsignaturaPlan[];
-  createdAt: string;
-  updatedAt: string;
+  study_plan_id: string;
+  version_number: number;
+  state: EstadoPlan;
+  published_at: string;
+  subjects: AsignaturaPlan[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PlanEstudio {
   id: string;
-  carreraId: string;
-  numeroVersionActual: number;
-  estado: EstadoPlan;
-  createdAt: string;
-  updatedAt: string;
-  carrera?: Carrera;
-  versionesHistorico?: VersionPlanEstudio[];
-  asignaturasVigentes?: AsignaturaPlan[];
+  career_id: string;
+  year: number;
+  state: EstadoPlan;
+  created_at: string;
+  updated_at: string;
+  career?: Carrera;
+  history?: VersionPlanEstudio[];
+  subjects?: AsignaturaPlan[];
 }
 
 export interface DetallesPlan {
-    carrera: string;
-    añoVersion: number;
-    estado: Boolean;
-    totalAsignaturas:number;
-    totalCreditos:number;
-    ultimaActualizacion:string;
-    actualizadoPor:string;
+    career: string;
+    year: number;
+    is_active: boolean;
+    total_subjects: number;
+    total_credits: number;
+    last_update: string;
+    updated_by: string;
 }

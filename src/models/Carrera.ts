@@ -3,7 +3,7 @@ import { PlanEstudio } from "./PlanEstudio";
 
 export interface Carrera {
 	id: string;
-	nombre: string;
+	name: string;
 	codigo: string;
 	descripcion?: string;
 	archivada: boolean;
@@ -14,13 +14,13 @@ export interface Carrera {
 }
 
 export interface CrearCarreraInput {
-	nombre: string;
+	name: string;
 	codigo: string;
 	descripcion?: string;
 }
 
 export interface EditarCarreraInput {
-	nombre?: string;
+	name?: string;
 	codigo?: string;
 	descripcion?: string;
 }
