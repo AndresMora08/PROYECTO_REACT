@@ -1,9 +1,9 @@
 import axios from "axios";
 import { PlanEstudio, AsignaturaPlan, VersionPlanEstudio } from "../models/PlanEstudio";
 
-const API_URL = "http://127.0.0.1:5000/api/planes-estudio";
+const API_URL = "http://127.0.0.1:5000/api/study-plans";
 /* MODIFICADO: Agregada URL para carreras ya que es necesaria para el listado inicial */
-const CARRERAS_URL = "http://127.0.0.1:5000/api/carreras";
+const CARRERAS_URL = "http://127.0.0.1:5000/api/careers";
 
 class PlanEstudioService {
   /**
@@ -11,6 +11,7 @@ class PlanEstudioService {
    */
   async getCarreras(): Promise<any[]> {
     try {
+      /* CORREGIDO: Ahora usa CARRERAS_URL y no requiere carreraId para el listado global */
       const response = await axios.get(CARRERAS_URL);
       return response.data.data ?? response.data;
     } catch (error) {
@@ -25,8 +26,8 @@ class PlanEstudioService {
    */
   async getPlanVigente(carreraId: string): Promise<PlanEstudio | null> {
     try {
-      /* MODIFICADO: Endpoint corregido para seguir estructura REST */
-      const response = await axios.get(`${API_URL}/carrera/${carreraId}/vigente`);
+      /* CORREGIDO: Se cambió 'carrera' por 'career' para coincidir con el backend */
+      const response = await axios.get(`${API_URL}/career/${carreraId}/vigente`);
       // MODIFICADO: Manejo de envoltura de datos .data.data
       return response.data.data ?? response.data;
     } catch (error) {
