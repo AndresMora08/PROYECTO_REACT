@@ -73,11 +73,17 @@ class GroupService {
     // =====================================================
     // 🔹 ASIGNAR DOCENTE A GRUPO (Patch específico del Postman)
     // =====================================================
+ // =====================================================
+    // 🔹 ASIGNAR DOCENTE A GRUPO 
+    // =====================================================
+  // En groupService.ts
     async assignTeacher(groupId: string, teacherId: string): Promise<Group> {
+        // Opción limpia: Eliminamos el body {} y las cabeceras manuales para 
+        // ver si tu Flask rechaza la declaración explícita de JSON.
         const response = await axios.patch<Group>(
-            `${API_URL}/${groupId}/assign-teacher/${teacherId}`
+            `http://127.0.0.1:5000/api/academic/groups/${groupId}/assign-teacher/${teacherId}`
         );
-        return response.data;
+        return response.data || response;  //error a corregir 
     }
 
     // =====================================================

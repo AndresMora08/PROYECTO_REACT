@@ -2,49 +2,55 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import GenericForm from "../../components/GenericForm";
-import { User } from "../../models/User";
-import { userService } from "../../service/userService";
+import { userService, RegisterStudentDTO, RegisterTeacherDTO } from "../../service/userService";
 
 const CreateUser: React.FC = () => {
     const navigate = useNavigate();
     const [step, setStep] = useState<number>(1);
-    const [baseUserData, setBaseUserData] = useState<Partial<User>>({});
+    const [baseUserData, setBaseUserData] = useState<Record<string, any>>({});
 
     const handleBaseSubmit = (formData: Record<string, any>) => {
         setBaseUserData({
             email: formData.email,
             password: formData.password,
             code: formData.code,
-            role: formData.role,
-            is_active: true
+            role: formData.role
         });
         setStep(2);
     };
 
     const handleProfileSubmit = async (formData: Record<string, any>) => {
         try {
-            // CORRECCIÓN: Unificamos los datos base con los del perfil
-            const fullData = {
-                ...baseUserData,
-                first_name: formData.first_name, // CORRECCIÓN: snake_case
-                last_name: formData.last_name,
-                identification: Number(formData.identification)
-            };
-
             if (baseUserData.role === "STUDENT") {
-                await userService.registerStudent(fullData as any);
+                const studentPayload: RegisterStudentDTO = {
+                    email: baseUserData.email,
+                    password: baseUserData.password,
+                    code: baseUserData.code,
+                    role: baseUserData.role,
+                    first_name: formData.first_name,
+                    last_name: formData.last_name,
+                    identification: String(formData.identification) // 💡 Conservamos como string
+                };
+                await userService.registerStudent(studentPayload);
             } else {
-                await userService.registerTeacher({
-                    ...fullData,
-                    phone: formData.phone,
-                    speciality: formData.speciality
-                } as any);
+                const teacherPayload: RegisterTeacherDTO = {
+                    email: baseUserData.email,
+                    password: baseUserData.password,
+                    code: baseUserData.code,
+                    role: baseUserData.role,
+                    first_name: formData.first_name,
+                    last_name: formData.last_name,
+                    identification: String(formData.identification),
+                    phone: formData.phone || null,
+                    specialty: formData.specialty || null // 💡 CORRECCIÓN: 'specialty' sin la 'i'
+                };
+                await userService.registerTeacher(teacherPayload);
             }
 
-            Swal.fire({ icon: "success", title: "Usuario creado" });
+            Swal.fire({ icon: "success", title: "Usuario creado con éxito" });
             navigate("/users/list");
         } catch (error) {
-            Swal.fire({ icon: "error", title: "Error al crear" });
+            Swal.fire({ icon: "error", title: "Error al crear", text: "Verifica los datos o que el código/email no estén duplicados." });
         }
     };
 
@@ -68,13 +74,12 @@ const CreateUser: React.FC = () => {
             {step === 2 && (
                 <GenericForm
                     fields={[
-                        // CORRECCIÓN: Nombres de campos idénticos al modelo User
                         { name: "first_name", label: "Nombre", type: "text" },
                         { name: "last_name", label: "Apellido", type: "text" },
                         { name: "identification", label: "Identificación", type: "text" },
                         ...(baseUserData.role === "TEACHER" ? [
                             { name: "phone", label: "Teléfono", type: "text" },
-                            { name: "speciality", label: "Especialidad", type: "text" }
+                            { name: "specialty", label: "Especialidad", type: "text" } // 💡 CORRECCIÓN: 'specialty'
                         ] : [])
                     ]}
                     buttonLabel={baseUserData.role === "STUDENT" ? "Registrar Estudiante" : "Registrar Docente"}

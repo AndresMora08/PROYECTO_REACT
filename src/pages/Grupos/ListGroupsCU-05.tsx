@@ -21,6 +21,7 @@ const ListGroups: React.FC = () => {
         try {
             setLoading(true);
             const response = await groupService.getGroups();
+            console.log("Grupos obtenidos:", response);
             setData(Array.isArray(response) ? response : []);
         } catch (error) {
             console.error(error);

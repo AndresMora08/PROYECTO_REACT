@@ -6,9 +6,14 @@ import SearchInput from "../../components/GenericSearch";
 import { User } from "../../models/User";
 import { userService } from "../../service/userService";
 
+// Interfaz para la vista que contiene la combinación de la cuenta con su perfil
+interface DisplayUser extends User {
+    fullName: string;
+}
+
 const Users: React.FC = () => {
     const navigate = useNavigate();
-    const [data, setData] = useState<User[]>([]);
+    const [data, setData] = useState<DisplayUser[]>([]);
     const [search, setSearch] = useState<string>("");
     const [loading, setLoading] = useState<boolean>(true);
 
@@ -17,8 +22,57 @@ const Users: React.FC = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const response = await userService.getUsers();
-            setData(Array.isArray(response) ? response : []);
+            
+            // 🔹 MODIFICACIÓN: Consumimos de forma paralela los tres endpoints necesarios
+            const [responseUsers, responseTeachers, responseStudents] = await Promise.all([
+                userService.getUsers(),
+                userService.getTeachers(),
+                userService.getStudents()
+            ]);
+
+            console.log("Usuarios crudos:", responseUsers);
+            console.log("Docentes crudos:", responseTeachers);
+            console.log("Estudiantes crudos:", responseStudents);
+
+            const mergedUsers: DisplayUser[] = responseUsers.map((user) => {
+                // Guardián de Tipo: Si el usuario carece de ID, evitamos comparar campos indefinidos
+                if (!user.id) {
+                    return {
+                        ...user,
+                        fullName: "Usuario sin ID"
+                    };
+                }
+
+                // 🔹 Caso 1: El usuario es un Docente (Código empieza por TCH o rol TEACHER)
+                if (user.code?.startsWith("TCH") || user.role === "TEACHER") {
+                    const teacherProfile = responseTeachers.find(t => t.user_id === user.id);
+                    return {
+                        ...user,
+                        fullName: teacherProfile 
+                            ? `${teacherProfile.first_name} ${teacherProfile.last_name}` 
+                            : "Docente sin Perfil"
+                    };
+                }
+                
+                // 🔹 Caso 2: El usuario es un Estudiante (Código empieza por STU o rol STUDENT)
+                if (user.code?.startsWith("STU") || user.role === "STUDENT") {
+                    const studentProfile = responseStudents.find(s => s.user_id === user.id);
+                    return {
+                        ...user,
+                        fullName: studentProfile 
+                            ? `${studentProfile.first_name} ${studentProfile.last_name}` 
+                            : "Estudiante sin Perfil"
+                    };
+                }
+                
+                // Caso por defecto: Administradores u otras cuentas de sistema
+                return {
+                    ...user,
+                    fullName: user.role === "ADMIN" ? "Administrador" : "Sistema / Soporte"
+                };
+            });
+
+            setData(mergedUsers);
         } catch (error) {
             Swal.fire({ icon: "error", title: "Error", text: "Error al cargar datos" });
         } finally {
@@ -29,6 +83,11 @@ const Users: React.FC = () => {
     const handleAction = async (action: string, item: any) => {
         if (action === "edit") navigate(`/users/update/${item.id}`);
         else if (action === "disable") {
+            if (!item.id) {
+                Swal.fire("Error", "El usuario no posee un ID válido", "error");
+                return;
+            }
+
             const result = await Swal.fire({
                 title: "¿Desactivar usuario?",
                 icon: "warning",
@@ -36,7 +95,7 @@ const Users: React.FC = () => {
                 confirmButtonText: "Sí, desactivar"
             });
             if (result.isConfirmed) {
-                const success = await userService.deactivateUser(item.id);
+                const success = await userService.deactivateUser(item.id); 
                 if (success) {
                     Swal.fire("Desactivado", "", "success");
                     fetchData();
@@ -45,15 +104,14 @@ const Users: React.FC = () => {
         }
     };
 
-    // CORRECCIÓN: Filtro actualizado para incluir identificación y usar campos de User
     const filtered = data.filter((item) => {
         const text = search.toLowerCase();
         if (!text) return true;
         return (
-            item.first_name?.toLowerCase().includes(text) ||
-            item.last_name?.toLowerCase().includes(text) ||
+            item.fullName.toLowerCase().includes(text) ||
             item.code?.toLowerCase().includes(text) ||
-            item.email?.toLowerCase().includes(text)
+            item.email?.toLowerCase().includes(text) ||
+            item.role?.toLowerCase().includes(text)
         );
     });
 
@@ -73,11 +131,9 @@ const Users: React.FC = () => {
                 data={filtered.map((item) => ({
                     id: item.id,
                     code: item.code,
-                    // CORRECCIÓN: Unión de nombres simplificada
-                    name: `${item.first_name || ""} ${item.last_name || ""}`,
+                    name: item.fullName,
                     email: item.email,
-                    role: item.role,
-                    // CORRECCIÓN: Acceso a is_active
+                    role: item.role ?? "N/A",
                     status: item.is_active ? "Activo" : "Inactivo",
                     createdAt: item.created_at ? new Date(item.created_at).toLocaleDateString() : "N/A"
                 }))}

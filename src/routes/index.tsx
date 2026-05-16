@@ -1,3 +1,4 @@
+
 import { lazy } from "react";
 
 const AdminHub = lazy(() => import("../pages/Admin/AdminHub"));
@@ -38,6 +39,16 @@ const UserCreate = lazy(
 // 🔹 EDITAR
 const UserUpdate = lazy(
     () => import("../pages/Users/UpdateUsers")
+);
+
+// ======================================================
+// 🔹 GRUPOS (NUEVOS COMPONENTES)
+// ======================================================
+const ListGroups = lazy(
+    () => import("../pages/Grupos/ListGroupsCU-05")
+);
+const AssignTeacher = lazy(
+    () => import("../pages/Grupos/AgregarTeacher")
 );
 
 
@@ -146,9 +157,27 @@ const coreRoutes = [
         title: "Editar Usuario",
         component: UserUpdate,
     },
+    
+    // =========================================
+    // 🔹 ASIGNATURAS
+    // =========================================
     { path: "/subjects/list",        title: "Asignaturas",          component: SubjectList },
     { path: "/subjects/create",      title: "Nueva Asignatura",     component: SubjectCreate },
     { path: "/subjects/update/:id",  title: "Editar Asignatura",    component: SubjectUpdate },
+
+    // =========================================
+    // 🔹 GRUPOS ACADÉMICOS
+    // =========================================
+    { 
+        path: "/groups/list", 
+        title: "Grupos Académicos", 
+        component: ListGroups 
+    },
+    { 
+        path: "/groups/manage/:groupId", 
+        title: "Asignar Docente a Grupo", 
+        component: AssignTeacher 
+    },
 
 ];
 
