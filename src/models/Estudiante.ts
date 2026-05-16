@@ -1,4 +1,3 @@
-
 // src/models/Estudiante.ts
 
 import { User } from "./User";
@@ -17,10 +16,6 @@ export interface Student extends User {
 
     calificaciones: CalificacionDetalle[];
 
-    firstName: string;
 
-    lastName: string;
-
-    identification: number;
 
 }

@@ -1,4 +1,4 @@
-import { Grupo } from "./Grupo";
+import { Group } from "./Grupo";
 import { PlanEstudio } from "./PlanEstudio";
 
 export interface Subject {
@@ -10,6 +10,6 @@ export interface Subject {
     is_active: boolean;
     created_at: string;
     updated_at: string;
-  grupos?: Grupo[];
+  grupos?: Group[];
   planEstudio?:PlanEstudio;
 }

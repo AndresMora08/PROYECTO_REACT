@@ -1,4 +1,4 @@
-import { Grupo } from "./Grupo";
+import { Group } from "./Grupo";
 
 export enum EstadoSemestre {
 	ACTIVO = "activo",
@@ -8,25 +8,25 @@ export enum EstadoSemestre {
 export interface Semestre {
 	id: string;
 	carreraId: string;
-	nombre: string;
+	name: string;
 	fechaInicio: string;
 	fechaFin: string;
 	estado: EstadoSemestre;
 	createdAt: string;
 	updatedAt: string;
-	grupos:Grupo[];
+	grupos:Group[];
 }
 
 export interface CrearSemestreInput {
 	carreraId: string;
-	nombre: string;
+	name: string;
 	fechaInicio: string;
 	fechaFin: string;
 	estado?: EstadoSemestre;
 }
 
 export interface EditarSemestreInput {
-	nombre?: string;
+	name?: string;
 	fechaInicio?: string;
 	fechaFin?: string;
 	estado?: EstadoSemestre;

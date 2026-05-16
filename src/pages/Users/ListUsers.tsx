@@ -1,372 +1,95 @@
-import React, {
-    useEffect,
-    useState
-} from "react";
-
-import {
-    useNavigate
-} from "react-router-dom";
-
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
-
-import GenericTable
-from "../../components/GenericTable";
-
-import SearchInput
-from "../../components/GenericSearch";
-
-import { User }
-from "../../models/User";
-
-import { userService }
-from "../../service/userService";
+import GenericTable from "../../components/GenericTable";
+import SearchInput from "../../components/GenericSearch";
+import { User } from "../../models/User";
+import { userService } from "../../service/userService";
 
 const Users: React.FC = () => {
-
     const navigate = useNavigate();
+    const [data, setData] = useState<User[]>([]);
+    const [search, setSearch] = useState<string>("");
+    const [loading, setLoading] = useState<boolean>(true);
 
-    // =====================================================
-    // 🔹 ESTADOS
-    // =====================================================
-
-    const [data, setData] =
-        useState<User[]>([]);
-
-    const [search, setSearch] =
-        useState<string>("");
-
-    const [loading, setLoading] =
-        useState<boolean>(true);
-
-    // =====================================================
-    // 🔹 CARGA INICIAL
-    // =====================================================
-
-    useEffect(() => {
-
-        fetchData();
-
-    }, []);
-
-    // =====================================================
-    // 🔹 BUSCADOR REACTIVO
-    // =====================================================
-
-    
-
-    // =====================================================
-    // 🔹 OBTENER USUARIOS
-    // =====================================================
+    useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
-
         try {
-
             setLoading(true);
-
-            const response =
-                await userService.getUsers();
-
-            // 🔹 Validar que sí sea arreglo
-            const users =
-                Array.isArray(response)
-                    ? response
-                    : [];
-
-            console.log(
-                "USUARIOS:",
-                users
-            );
-
-            setData(users);
-
+            const response = await userService.getUsers();
+            setData(Array.isArray(response) ? response : []);
         } catch (error) {
-
-            console.error(error);
-
-            Swal.fire({
-                icon: "error",
-                title: "Error",
-                text:
-                    "No se pudieron obtener los usuarios"
-            });
-
+            Swal.fire({ icon: "error", title: "Error", text: "Error al cargar datos" });
         } finally {
-
             setLoading(false);
-
         }
-
     };
 
-    // =====================================================
-    // 🔹 BUSCAR
-    // =====================================================
-
-   
-
-    // =====================================================
-    // 🔹 ACCIONES
-    // =====================================================
-
-    const handleAction = async (
-        action: string,
-        item: any
-    ) => {
-
-        // 🔹 Editar
-        if (action === "edit") {
-
-            navigate(
-                `/users/update/${item.id}`
-            );
-
-        }
-
-        // 🔹 Desactivar
-        else if (
-            action === "disable"
-        ) {
-
-            Swal.fire({
-
-                title:
-                    "¿Desea desactivar este usuario?",
-
-                text:
-                    "El usuario ya no podrá acceder al sistema.",
-
+    const handleAction = async (action: string, item: any) => {
+        if (action === "edit") navigate(`/users/update/${item.id}`);
+        else if (action === "disable") {
+            const result = await Swal.fire({
+                title: "¿Desactivar usuario?",
                 icon: "warning",
-
                 showCancelButton: true,
-
-                confirmButtonColor:
-                    "#3085d6",
-
-                cancelButtonColor:
-                    "#d33",
-
-                confirmButtonText:
-                    "Sí, desactivar",
-
-                cancelButtonText:
-                    "Cancelar",
-
-            }).then(async (result) => {
-
-                if (result.isConfirmed) {
-
-                    try {
-
-                        const success =
-                            await userService.deactivateUser(
-                                item.id
-                            );
-
-                        if (success) {
-
-                            Swal.fire({
-
-                                icon: "success",
-
-                                title:
-                                    "Usuario desactivado",
-
-                                text:
-                                    "El usuario fue desactivado correctamente"
-
-                            });
-
-                            fetchData();
-
-                        }
-
-                    } catch (error) {
-
-                        console.error(error);
-
-                        Swal.fire({
-
-                            icon: "error",
-
-                            title: "Error",
-
-                            text:
-                                "No se pudo desactivar el usuario"
-
-                        });
-
-                    }
-
-                }
-
+                confirmButtonText: "Sí, desactivar"
             });
-
+            if (result.isConfirmed) {
+                const success = await userService.deactivateUser(item.id);
+                if (success) {
+                    Swal.fire("Desactivado", "", "success");
+                    fetchData();
+                }
+            }
         }
-
     };
 
-    // =====================================================
-    // 🔹 CREAR
-    // =====================================================
-
-    const handleCreate = () => {
-
-        navigate("/users/create");
-
-    };
-
-    // =====================================================
-    // 🔹 LOADING
-    // =====================================================
-
-    if (loading) {
-
+    // CORRECCIÓN: Filtro actualizado para incluir identificación y usar campos de User
+    const filtered = data.filter((item) => {
+        const text = search.toLowerCase();
+        if (!text) return true;
         return (
-
-            <div className="p-4">
-
-                <p>
-                    Cargando usuarios...
-                </p>
-
-            </div>
-
+            item.first_name?.toLowerCase().includes(text) ||
+            item.last_name?.toLowerCase().includes(text) ||
+            item.code?.toLowerCase().includes(text) ||
+            item.email?.toLowerCase().includes(text)
         );
+    });
 
-    }
-const filtered = data.filter((item: any) => {
-    const text = search.toLowerCase();
-    if (!text) return true;
-    return (
-        item.first_name?.toLowerCase().includes(text) ||
-        item.last_name?.toLowerCase().includes(text) ||
-        item.code?.toLowerCase().includes(text) ||
-        item.email?.toLowerCase().includes(text)
-    );
-});
-    return (
+    if (loading) return <div className="p-4">Cargando usuarios...</div>;
 
+    return (
         <div className="space-y-5">
-
-            {/* HEADER */}
             <div className="flex items-center justify-between">
-
-                <div>
-
-                    <h2 className="text-2xl font-semibold text-black dark:text-white">
-
-                        Lista de Usuarios
-
-                    </h2>
-
-                    <p className="text-sm text-gray-500">
-
-                        Gestión y administración de usuarios
-
-                    </p>
-
-                </div>
-
-                {/* 🔹 BOTÓN CREAR */}
-                <button
-
-                    type="button"
-
-                    onClick={handleCreate}
-
-                    className="
-                        rounded-md
-                        bg-blue-600
-                        px-4 py-2
-                        text-sm font-medium
-                        text-white
-                        transition
-                        hover:bg-blue-700
-                    "
-                >
-
+                <h2 className="text-2xl font-semibold">Lista de Usuarios</h2>
+                <button onClick={() => navigate("/users/create")} className="bg-blue-600 text-white px-4 py-2 rounded-md">
                     Crear Usuario
-
                 </button>
-
             </div>
-
-            {/* BUSCADOR */}
-            <SearchInput
-
-                label="Buscar usuario"
-                placeholder="Buscar por nombre, código o email..."
-                value={search}
-                onChange={setSearch}
-
-            />
-
-            {/* TABLA */}
+            <SearchInput label="Buscar usuario" placeholder="Nombre, código o email..." value={search} onChange={setSearch} />
+            
             <GenericTable
-
-                data={filtered.map((item: any) => ({
-
+                data={filtered.map((item) => ({
                     id: item.id,
-
-                    code:
-                        item.code,
-
-                    name:
-                        `${item.first_name || ""} ${item.last_name || ""}`,
-
-                    email:
-                        item.email,
-
-                    role:
-                        item.role,
-
-                    status:
-                        item.is_active
-                            ? "Activo"
-                            : "Inactivo",
-
-                    createdAt: item.created_at
-                        ? new Date(item.created_at).toLocaleString()
-                        : "Sin fecha",
-
+                    code: item.code,
+                    // CORRECCIÓN: Unión de nombres simplificada
+                    name: `${item.first_name || ""} ${item.last_name || ""}`,
+                    email: item.email,
+                    role: item.role,
+                    // CORRECCIÓN: Acceso a is_active
+                    status: item.is_active ? "Activo" : "Inactivo",
+                    createdAt: item.created_at ? new Date(item.created_at).toLocaleDateString() : "N/A"
                 }))}
-
-                columns={[
-
-                    "code",
-                    "name",
-                    "email",
-                    "role",
-                    "status",
-                    "createdAt"
-
-                ]}
-
+                columns={["code", "name", "email", "role", "status", "createdAt"]}
                 actions={[
-
-                    {
-                        name: "edit",
-                        label: "Editar"
-                    },
-
-                    {
-                        name: "disable",
-                        label: "Desactivar"
-                    }
-
+                    { name: "edit", label: "Editar" },
+                    { name: "disable", label: "Desactivar" }
                 ]}
-
                 onAction={handleAction}
-
-                selectable={false}
-
             />
-
         </div>
-
     );
-
 };
 
 export default Users;

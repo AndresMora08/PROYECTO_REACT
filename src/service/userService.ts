@@ -1,255 +1,82 @@
-
-
 import axios from "axios";
-
 import { User } from "../models/User";
 import { Teacher } from "../models/Docente";
 import { Student } from "../models/Estudiante";
 
-
 const API_URL = "http://127.0.0.1:5000/api/users";
 
 class UserService {
-    // ... resto igual
-
-    // =====================================================
-    // 🔹 OBTENER TODOS
-    // =====================================================
-async getUsers(): Promise<User[]> {
-
-    try {
-
-        const response = await axios.get("http://127.0.0.1:5000/api/users");
-
-        console.log("FULL RESPONSE:", response);
-        console.log("DATA:", response.data);
-
-        // ✔️ MISMA LÓGICA QUE YA FUNCIONA PERO SEGURA
-        return response.data.data ?? [];
-
-    } catch (error) {
-
-        console.error("Error al obtener usuarios:", error);
-
-        return [];
-
-    }
-
-}
-
-    // =====================================================
-    // 🔹 OBTENER POR ID
-    // =====================================================
-
-   async getUserById(id: number): Promise<User | null> {
-    try {
-        const response = await axios.get<any>(
-            `http://127.0.0.1:5000/api/users/${id}`
-        );
-        // ✅ igual que getUsers
-        console.log("RESPONSE COMPLETO:", response);        // ← agrega
-        console.log("RESPONSE.DATA:", response.data);       // ← agrega
-        console.log("RESPONSE.DATA.DATA:", response.data.data); //
-        return response.data.data ?? response.data;
-    } catch (error) {
-        console.error("Usuario no encontrado:", error);
-        console.error("Error al obtener usuario por ID:", error);
-        return null;
-    }
-}
-
-    // =====================================================
-    // 🔹 REGISTRAR DOCENTE
-    // =====================================================
-
-   async registerStudent(
-    student: Omit<Student, "id">
-): Promise<Student | null> {
-
-    // Sin try/catch → el error sube al Swal de CreateUser
-    const response = await axios.post<Student>(
-        `${API_URL}/public/register-student`,
-        {
-            email:          student.email,
-            password:       student.password,
-            code:           student.code,
-            role:           student.role,
-            first_name:     student.firstName,   // ✅ snake_case
-            last_name:      student.lastName,    // ✅ snake_case
-            identification: student.identification
-        }
-    );
-
-    return response.data;
-}
-
-async registerTeacher(
-    teacher: Omit<Teacher, "id">
-): Promise<Teacher | null> {
-
-    const response = await axios.post<Teacher>(
-        `${API_URL}/public/register-teacher`,
-        {
-            email:          teacher.email,
-            password:       teacher.password,
-            code:           teacher.code,
-            role:           teacher.role,
-            first_name:     teacher.firstName,   // ✅ snake_case
-            last_name:      teacher.lastName,    // ✅ snake_case
-            identification: teacher.identification,
-            phone:          teacher.phone,
-            specialty:      teacher.speciality   // ✅ sin "i" al final
-        }
-    );
-
-    return response.data;
-}
-
-    // =====================================================
-    // 🔹 ACTUALIZAR
-    // =====================================================
-
-    async updateUser(
-    id: number,
-    user: Partial<User & Student & Teacher>
-): Promise<User | null> {
-
-    try {
-
-        const response =
-            await axios.put<User>(
-
-                `${"http://127.0.0.1:5000"}/api/users/${id}`,
-
-                user
-
-            );
-
-        return response.data;
-
-    } catch (error) {
-
-        console.error(
-            "Error al actualizar usuario:",
-            error
-        );
-
-        return null;
-
-    }
-
-}
-
-    // =====================================================
-    // 🔹 ELIMINAR
-    // =====================================================
-
-    async deleteUser(
-        id: number
-    ): Promise<boolean> {
-
+    async getUsers(): Promise<User[]> {
         try {
-
-            await axios.delete(
-                `${"http://127.0.0.1:5000"}/api/users/${id}`
-            );
-
-            return true;
-
+            const response = await axios.get(API_URL);
+            // CORRECCIÓN: Acceso seguro a la data envuelta
+            return response.data.data ?? [];
         } catch (error) {
-
-            console.error(
-                "Error al eliminar usuario:",
-                error
-            );
-
-            return false;
-
-        }
-
-    }
-
-    // =====================================================
-    // 🔹 BUSCAR
-    // =====================================================
-
-    async searchUsers(params: {
-
-        first_name?: string;
-
-        code?: string;
-
-        identification?: string;
-
-    }): Promise<User[]> {
-
-        try {
-
-            const response =
-                await axios.get(
-                    `${"http://127.0.0.1:5000"}/api/users/search`,
-                    {
-                        params
-                    }
-                );
-
-            console.log(
-                "SEARCH RESPONSE:",
-                response.data
-            );
-
-            // 🔹 Validar respuesta
-            if (response.data.data) {
-
-                return response.data.data;
-
-            }
-
-            return response.data;
-
-        } catch (error) {
-
-            console.error(
-                "Error al buscar usuarios:",
-                error
-            );
-
+            console.error("Error al obtener usuarios:", error);
             return [];
-
         }
-
     }
 
-    // =====================================================
-    // 🔹 DESACTIVAR
-    // =====================================================
-
-    async deactivateUser(
-        id: number
-    ): Promise<boolean> {
-
+    async getUserById(id: number): Promise<User | null> {
         try {
-
-            await axios.patch(
-                `${"http://127.0.0.1:5000"}/api/users/${id}/deactivate`
-            );
-
-            return true;
-
+            const response = await axios.get(`${API_URL}/${id}`);
+            // CORRECCIÓN: Manejo de respuesta única
+            return response.data.data ?? response.data;
         } catch (error) {
-
-            console.error(
-                "Error al desactivar usuario:",
-                error
-            );
-
-            return false;
-
+            console.error("Error al obtener usuario por ID:", error);
+            return null;
         }
-
     }
 
+    async registerStudent(student: Omit<Student, "id">): Promise<Student | null> {
+        // CORRECCIÓN: Aseguramos que los nombres de los campos sean snake_case para el API
+        const response = await axios.post( `${API_URL}/public/register-student`, {
+            email: student.email,
+            password: student.password,
+            code: student.code,
+            role: student.role,
+            first_name: student.first_name,
+            last_name: student.last_name,
+            identification: student.identification
+        });
+        return response.data;
+    }
+
+    async registerTeacher(teacher: Omit<Teacher, "id">): Promise<Teacher | null> {
+        // CORRECCIÓN: Mapeo de campos de docente incluyendo especialidad
+        const response = await axios.post( `${API_URL}/public/register-teacher`, {
+            email: teacher.email,
+            password: teacher.password,
+            code: teacher.code,
+            role: teacher.role,
+            first_name: teacher.first_name,
+            last_name: teacher.last_name,
+            identification: teacher.identification,
+            phone: teacher.phone,
+            specialty: (teacher as any).speciality // CORRECCIÓN: El backend usa 'specialty' sin la 'i'
+        });
+        return response.data;
+    }
+
+    async updateUser(id: number, user: Partial<User>): Promise<User | null> {
+        try {
+            const response = await axios.put(`${API_URL}/${id}`, user);
+            return response.data;
+        } catch (error) {
+            console.error("Error al actualizar usuario:", error);
+            return null;
+        }
+    }
+
+    async deactivateUser(id: number): Promise<boolean> {
+        try {
+            await axios.patch(`${API_URL}/${id}/deactivate`);
+            return true;
+        } catch (error) {
+            console.error("Error al desactivar:", error);
+            return false;
+        }
+    }
 }
 
-export const userService =
-    new UserService();
+export const userService = new UserService();

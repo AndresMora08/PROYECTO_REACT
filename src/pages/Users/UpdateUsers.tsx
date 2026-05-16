@@ -1,287 +1,87 @@
-import React, {
-    useEffect,
-    useState
-} from "react";
-
-import {
-    useNavigate,
-    useParams
-} from "react-router-dom";
-
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
-
-import GenericForm
-from "../../components/GenericForm";
-
-import { userService }
-from "../../service/userService";
-
-import { Teacher }
-from "../../models/Docente";
-
-import { Student }
-from "../../models/Estudiante";
+import GenericForm from "../../components/GenericForm";
+import { userService } from "../../service/userService";
+import { User } from "../../models/User";
 
 const UpdateUser: React.FC = () => {
-
     const navigate = useNavigate();
-
     const { id } = useParams();
-
-    // =====================================================
-    // 🔹 USER STATE
-    // =====================================================
-
-    const [user, setUser] =
-        useState<
-            Teacher |
-            Student |
-            null
-        >(null);
-
-    // =====================================================
-    // 🔹 LOAD
-    // =====================================================
+    const [user, setUser] = useState<User | null>(null);
 
     useEffect(() => {
-
-        if (id) {
-
-            fetchUser(Number(id));
-
-        }
-
+        if (id) fetchUser(Number(id));
     }, [id]);
 
-    // =====================================================
-    // 🔹 GET USER
-    // =====================================================
-
-    const fetchUser = async (
-        userId: number
-    ) => {
-
-        const response =
-            await userService.getUserById(
-                userId
-            );
-
-        if (response) {
-
-            setUser(
-                response as
-                Teacher |
-                Student
-            );
-
-        }
-
+    const fetchUser = async (userId: number) => {
+        const response = await userService.getUserById(userId);
+        if (response) setUser(response);
         else {
-
-            Swal.fire({
-                icon: "error",
-                title: "Error",
-                text:
-                    "Usuario no encontrado"
-            });
-
+            Swal.fire("Error", "Usuario no encontrado", "error");
             navigate("/users/list");
-
         }
-
     };
 
-    // =====================================================
-    // 🔹 SUBMIT
-    // =====================================================
-
-    const handleSubmit = async (
-        formData: Record<string, any>
-    ) => {
-
+    const handleSubmit = async (formData: Record<string, any>) => {
         if (!id) return;
-
         try {
+            // CORRECCIÓN: Mapeo de campos antes de enviar al servicio
+            const payload = {
+                email: formData.email,
+                code: formData.code,
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                identification: Number(formData.identification),
+                ...(user?.role === "TEACHER" ? {
+                    phone: formData.phone,
+                    specialty: formData.speciality
+                } : {})
+            };
 
-           const updatedUser = await userService.updateUser(Number(id), {
-    email:          formData.email,
-    code:           formData.code,
-    password:       formData.password,
-    first_name:     formData.firstName,    // ✅ snake_case
-    last_name:      formData.lastName,     // ✅ snake_case
-    identification: formData.identification,
-    ...(user?.role === "TEACHER" ? {
-        phone:      formData.phone,
-        specialty:  formData.speciality    // ✅ sin i
-    } : {})
-
-}as any
-);
-
-            if (updatedUser) {
-
-                Swal.fire({
-                    icon: "success",
-                    title:
-                        "Usuario actualizado",
-                    text:
-                        "Los datos fueron actualizados correctamente"
-                });
-
+            const updated = await userService.updateUser(Number(id), payload as any);
+            if (updated) {
+                Swal.fire({ icon: "success", title: "Actualizado correctamente" });
                 navigate("/users/list");
-
             }
-
-            else {
-
-                Swal.fire({
-                    icon: "error",
-                    title: "Error",
-                    text:
-                        "No se pudo actualizar"
-                });
-
-            }
-
         } catch (error) {
-
-            console.error(error);
-
-            Swal.fire({
-                icon: "error",
-                title: "Error",
-                text:
-                    "No se pudo actualizar el usuario"
-            });
-
+            Swal.fire("Error", "No se pudo actualizar", "error");
         }
-
     };
 
-    // =====================================================
-    // 🔹 LOADING
-    // =====================================================
-
-    if (!user) {
-
-        return (
-
-            <div className="p-4">
-
-                <p>
-                    Cargando usuario...
-                </p>
-
-            </div>
-
-        );
-
-    }
+    if (!user) return <div className="p-4">Cargando...</div>;
 
     return (
-
         <div className="space-y-5">
-
-            {/* HEADER */}
-            <div>
-
-                <h2 className="text-2xl font-semibold text-black dark:text-white">
-                    Editar Usuario
-                </h2>
-
-                <p className="text-sm text-gray-500">
-                    Actualiza la información del usuario
-                </p>
-
-            </div>
-
-            {/* FORM */}
+            <h2 className="text-2xl font-semibold">Editar Usuario</h2>
             <GenericForm
-
-            initialValues={{
-                  email:          user.email,
-                     code:           user.code,
-                        password:       "",
-                            firstName:      (user as any).first_name  || user.firstName,
-                                 lastName:       (user as any).last_name   || user.lastName,
-                                     identification: (user as any).identification,
-
-                                ...(user.role === "TEACHER" ? {
-                                      phone:      (user as any).phone,
-                                     speciality: (user as any).specialty   // ← backend devuelve "specialty" sin i
-    } : {})
-}}
-
+                initialValues={{
+                    email: user.email,
+                    code: user.code,
+                    first_name: user.first_name, // CORRECCIÓN: Acceso directo por modelo unificado
+                    last_name: user.last_name,
+                    identification: user.identification,
+                    ...(user.role === "TEACHER" ? {
+                        phone: (user as any).phone,
+                        speciality: (user as any).specialty
+                    } : {})
+                }}
                 fields={[
-
-                    {
-                        name: "email",
-                        label: "Email",
-                        type: "email"
-                    },
-
-                    {
-                        name: "code",
-                        label: "Código",
-                        type: "text"
-                    },
-
-                    {
-                        name: "password",
-                        label: "Password",
-                        type: "password"
-                    },
-
-                    {
-                        name: "firstName",
-                        label: "Nombre",
-                        type: "text"
-                    },
-
-                    {
-                        name: "lastName",
-                        label: "Apellido",
-                        type: "text"
-                    },
-
-                    {
-                        name: "identification",
-                        label: "Identificación",
-                        type: "text"
-                    },
-
-                    ...(user.role === "TEACHER"
-
-                        ? [
-
-                            {
-                                name: "phone",
-                                label: "Teléfono",
-                                type: "text"
-                            },
-
-                            {
-                                name: "speciality",
-                                label: "Especialidad",
-                                type: "text"
-                            }
-
-                        ]
-
-                        : [])
-
+                    { name: "email", label: "Email", type: "email" },
+                    { name: "code", label: "Código", type: "text" },
+                    { name: "first_name", label: "Nombre", type: "text" },
+                    { name: "last_name", label: "Apellido", type: "text" },
+                    { name: "identification", label: "Identificación", type: "text" },
+                    ...(user.role === "TEACHER" ? [
+                        { name: "phone", label: "Teléfono", type: "text" },
+                        { name: "speciality", label: "Especialidad", type: "text" }
+                    ] : [])
                 ]}
-
-                buttonLabel="Guardar cambios"
-
+                buttonLabel="Actualizar Usuario"
                 onSubmit={handleSubmit}
-
             />
-
         </div>
-
     );
-
 };
 
 export default UpdateUser;
