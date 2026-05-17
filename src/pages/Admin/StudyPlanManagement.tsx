@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import PageMeta from "../../components/common/PageMeta";
 import { Modal } from "../../components/ui/modal";
 import { useModal } from "../../hooks/useModal";
@@ -8,7 +8,7 @@ import { ListIcon, BoxCubeIcon } from "../../icons";
 import { Carrera } from "../../models/Carrera";
 import { PlanEstudio, AsignaturaPlan, EstadoPlan, DetallesPlan, VersionPlanEstudio } from "../../models/PlanEstudio";
 import { DataTable, TableColumn } from "../../components/tables/BasicTables/DataTable";
-/* MODIFICADO: Importación del servicio y SweetAlert para manejo de errores/éxito */
+
 import { planEstudioService } from "../../service/planEstudioService";
 import Swal from "sweetalert2";
 import { Subject } from "../../models/Asignatura";
@@ -31,14 +31,19 @@ const PlanEstudioPage: React.FC = () => {
   const { isOpen: isHistoryOpen, openModal: openHistoryModal, closeModal: closeHistoryModal } = useModal();
 
   /* Gestión de vistas y selección de carrera */
-  // Vista actual: 'list' (carreras) o 'edit' (plan de carrera seleccionada)
   const [currentView, setCurrentView] = useState<'list' | 'edit'>('list');
   
   // Carreras disponibles (Mock)
   const [carreras, setCarreras] = useState<Carrera[]>([]);
   
-  // Catálogo global de asignaturas para búsqueda (Mock)
-  const [catalogo] = useState<Subject[]>([]);
+  // Catálogo global de asignaturas para búsqueda
+  const [catalogo, setCatalogo] = useState<Subject[]>([]);
+
+  // Estado para el buscador del catálogo en el modal
+  const [terminoBusqueda, setTerminoBusqueda] = useState("");
+
+  // Estado para el semestre sugerido en el modal
+  const [semestreSugeridoModal, setSemestreSugeridoModal] = useState<number>(1);
 
   // Plan actualmente en gestión
   const [planSeleccionado, setPlanSeleccionado] = useState<PlanEstudio | null>(null);
@@ -46,30 +51,26 @@ const PlanEstudioPage: React.FC = () => {
   // Carrera seleccionada
   const [carreraSeleccionada, setCarreraSeleccionada] = useState<Carrera | null>(null);
   
-  /* MODIFICADO: Sustitución de Mock Data por llamada al servicio en useEffect */
   useEffect(() => {
     const fetchInitialData = async () => {
-      // Cargamos carreras reales desde el backend
       const dataCarreras = await planEstudioService.getCarreras();
       setCarreras(dataCarreras);
       
-      // Nota: El catálogo de asignaturas se cargará cuando el modal se abra o aquí si es global
+      const dataSubjects = await planEstudioService.getSubjects();
+      setCatalogo(dataSubjects);
     };
 
     fetchInitialData();
   }, []);
 
-  /* MODIFICADO: Función para cargar el plan real al seleccionar una carrera */
   const cargarPlanParaCarrera = async (carrera: Carrera) => {
     setCarreraSeleccionada(carrera);
     
-    // Llamada al servicio para obtener el plan vigente
     const plan = await planEstudioService.getPlanVigente(carrera.id);
     
     if (plan) {
-      // Si existe el plan, también cargamos su historial de versiones
-      const historial = await planEstudioService.getHistorialVersiones(plan.id);
-      setPlanSeleccionado({ ...plan, versionesHistorico: historial });
+      const historial = await planEstudioService.getHistorialVersiones(plan.id as string);
+      setPlanSeleccionado({ ...plan, history: historial });
     } else {
       setPlanSeleccionado(null);
       Swal.fire("Aviso", "Esta carrera aún no tiene un plan de estudios vigente configurado.", "info");
@@ -78,7 +79,6 @@ const PlanEstudioPage: React.FC = () => {
     setCurrentView('edit');
   };
 
-  /* MODIFICADO: Manejo real de eliminación de asignatura vinculado al backend */
   const manejarEliminarAsignatura = async (idVinculacion: string) => {
     const result = await Swal.fire({
       title: '¿Estás seguro?',
@@ -93,7 +93,6 @@ const PlanEstudioPage: React.FC = () => {
       const exito = await planEstudioService.desvincularAsignatura(idVinculacion);
       if (exito) {
         Swal.fire('Eliminado', 'La asignatura ha sido desvinculada.', 'success');
-        // Refrescamos los datos del plan
         if (carreraSeleccionada) cargarPlanParaCarrera(carreraSeleccionada);
       } else {
         Swal.fire('Error', 'No se pudo eliminar. Es posible que existan inscripciones activas (Regla E1).', 'error');
@@ -101,7 +100,6 @@ const PlanEstudioPage: React.FC = () => {
     }
   };
 
-  /* MODIFICADO: Persistencia real de la edición de asignatura */
   const manejarGuardarEdicion = async () => {
     if (planSeleccionado && asignaturaEnEdicion) {
       const exito = await planEstudioService.actualizarAsignaturaVinculada(
@@ -112,7 +110,6 @@ const PlanEstudioPage: React.FC = () => {
       if (exito) {
         await Swal.fire('Guardado', 'Los cambios se han persistido correctamente.', 'success');
         closeEditModal();
-        // Recargar datos para ver cambios reflejados
         if (carreraSeleccionada) cargarPlanParaCarrera(carreraSeleccionada);
       } else {
         Swal.fire('Error', 'Hubo un problema al actualizar la asignatura.', 'error');
@@ -120,7 +117,6 @@ const PlanEstudioPage: React.FC = () => {
     }
   };
 
-  /* MODIFICADO: Proceso de publicación conectado al Backend */
   const manejarConfirmarPublicacion = async () => {
     if (planSeleccionado) {
       const res = await planEstudioService.publicarNuevaVersion(planSeleccionado.id, añoNuevaVersion);
@@ -140,21 +136,57 @@ const PlanEstudioPage: React.FC = () => {
     setPlanSeleccionado(null);
   };
 
+  /**
+   * Toma una asignatura del catálogo global y la vincula al plan de estudios actual.
+   */
+  const manejarVincularAsignatura = async (asignatura: Subject) => {
+    if (!planSeleccionado) return;
+
+    try {
+      // Mostramos un indicador de carga opcional si fuera necesario
+      const data: Partial<AsignaturaPlan> = {
+        subject_id: asignatura.id,
+        // Utilizamos el semestre sugerido definido en el modal
+        suggested_semester: semestreSugeridoModal, 
+        // Usamos los créditos base de la asignatura
+        credits: asignatura.credits || 0, 
+        is_required: true
+      };
+
+      const res = await planEstudioService.vincularAsignatura(planSeleccionado.id, data);
+      
+      if (res) {
+        Swal.fire('¡Vinculada!', `La asignatura ${asignatura.name} ha sido añadida al plan.`, 'success');
+        // Refrescamos los datos del plan para mostrar la nueva materia en la tabla principal
+        if (carreraSeleccionada) cargarPlanParaCarrera(carreraSeleccionada);
+      }
+    } catch (error) {
+      console.error(error);
+      Swal.fire('Error', 'No se pudo vincular la asignatura. Verifique si ya existe en el plan.', 'error');
+    }
+  };
+
+  const catalogoFiltrado = useMemo(() => {
+    const query = terminoBusqueda.toLowerCase().trim();
+    if (!query) return catalogo;
+    return catalogo.filter(s => 
+      s.name.toLowerCase().includes(query) || 
+      s.code.toLowerCase().includes(query)
+    );
+  }, [catalogo, terminoBusqueda]);
+
   /* Acción para cargar datos en el modal y editar */
   const manejarEditarAsignatura = (asigPlan: AsignaturaPlan) => {
     setAsignaturaEnEdicion({ ...asigPlan });
     openEditModal();
   };
-  // E2: Plan sin ninguna Asignatura vinculada -> no se permite publicar.
   const manejarAbrirModalPublicar = () => {
-    if (!planSeleccionado || !planSeleccionado.asignaturasVigentes || planSeleccionado.asignaturasVigentes.length === 0) {
+    if (!planSeleccionado || !planSeleccionado.subjects || planSeleccionado.subjects.length === 0) {
       alert("ERROR (E2): No se permite publicar un plan sin asignaturas.");
       return;
     }
-    /* INICIO DE MODIFICACIÓN: Abrir modal de publicación */
-    setAñoNuevaVersion(planSeleccionado.numeroVersionActual + 1); // Sugerir el año siguiente
+    setAñoNuevaVersion(planSeleccionado.year + 1); // Sugerir el año siguiente
     openPublishModal();
-    /* FIN DE MODIFICACIÓN */
   };
 
   /* ========================================================================================= */
@@ -163,10 +195,10 @@ const PlanEstudioPage: React.FC = () => {
 
   // Configuración de columnas para la tabla de Carreras
   const careerColumns: TableColumn<Carrera>[] = [
-    { header: "Nombre de Carrera", key: "nombre", render: (c) => <span className="font-semibold text-gray-800 dark:text-white/90">{c.nombre}</span> },
-    { header: "Código", key: "codigo" },
-    { header: "Última Actualización", key: "updatedAt" },
-    { header: "Acciones", key: "actions", render: (c) => (
+    { header: "Name", key: "name", render: (c) => <span className="font-semibold text-gray-800 dark:text-white/90">{c.name}</span> },
+    { header: "Code", key: "code" },
+    { header: "Updated At", key: "updated_at" },
+    { header: "Actions", key: "actions", render: (c) => (
       <Button variant="outline" size="sm" onClick={() => cargarPlanParaCarrera(c)}>
         Gestionar Plan
       </Button>
@@ -175,20 +207,17 @@ const PlanEstudioPage: React.FC = () => {
 
   // Configuración de columnas para la tabla de Asignaturas del Plan seleccionado
   const subjectColumns: TableColumn<AsignaturaPlan>[] = [
-    /* INICIO DE MODIFICACIÓN: Separación de Código y Nombre */
-    { header: "Asignatura", key: "nombre", render: (s) => (
-      <span className="font-medium text-gray-800 dark:text-white/90">{s.asignatura?.name}</span>
+    { header: "Subject", key: "name", render: (s) => (
+      <span className="font-medium text-gray-800 dark:text-white/90">{s.subject?.name}</span>
     )},
-    { header: "Código", key: "codigo", render: (s) => (
-      <span className="text-gray-500 font-mono text-xs">{s.asignatura?.code || s.asignaturaId}</span>
+    { header: "Code", key: "code", render: (s) => (
+      <span className="text-gray-500 font-mono text-xs">{s.subject?.code || s.subject_id}</span>
     )},
-    /* FIN DE MODIFICACIÓN */
-    { header: "Créditos", key: "creditos" },
-    { header: "Semestre Sugerido", key: "semestreSugerido", render: (s) => (
-      <span className="px-2 py-1 bg-gray-100 dark:bg-white/10 rounded text-xs">Semestre {s.semestreSugerido}</span>
+    { header: "Credits", key: "credits" },
+    { header: "Semester", key: "suggested_semester", render: (s) => (
+      <span className="px-2 py-1 bg-gray-100 dark:bg-white/10 rounded text-xs">Semestre {s.suggested_semester}</span>
     )},
     { header: "Acciones", key: "actions", render: (s) => (
-      /* INICIO DE MODIFICACIÓN: Grupo de acciones con Editar y Eliminar */
       <div className="flex items-center gap-2">
         <button 
           onClick={() => manejarEditarAsignatura(s)}
@@ -200,28 +229,27 @@ const PlanEstudioPage: React.FC = () => {
         <button 
           onClick={() => manejarEliminarAsignatura(s.id)}
           className="text-gray-400 hover:text-error-500 transition-colors p-2"
-          title={s.tieneInscripcionesActivas ? "Bloqueado: Tiene inscripciones" : "Eliminar"}
+          title={s.has_active_enrollments ? "Bloqueado: Tiene inscripciones" : "Eliminar"}
         >
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
           </svg>
         </button>
       </div>
-      /* FIN DE MODIFICACIÓN */
     )},
   ];
 
   // Configuración de columnas para la tabla de Historial de Versiones
   const historyColumns: TableColumn<VersionPlanEstudio>[] = [
-    { header: "Año Versión", key: "numeroVersion", render: (v) => <span className="font-semibold text-gray-800 dark:text-white">{v.numeroVersion}</span> },
+    { header: "Version Year", key: "version_number", render: (v) => <span className="font-semibold text-gray-800 dark:text-white">{v.version_number}</span> },
     { header: "Estado Actual", key: "estado", render: (v) => (
-      <span className={`px-2 py-0.5 rounded text-xs ${v.estado === EstadoPlan.HISTORICO ? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400' : 'bg-success-500/10 text-success-500'}`}>
-        {v.estado.charAt(0).toUpperCase() + v.estado.slice(1)}
+      <span className={`px-2 py-0.5 rounded text-xs ${v.state === EstadoPlan.HISTORICO ? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400' : 'bg-success-500/10 text-success-500'}`}>
+        {v.state.charAt(0).toUpperCase() + v.state.slice(1)}
       </span>
     )},
-    { header: "N° Asignaturas", key: "asignaturas", render: (v) => v.asignaturas?.length || 0 },
-    { header: "Créditos", key: "creditos", render: (v) => v.asignaturas?.reduce((acc, a) => acc + (a.creditos || 0), 0) || 0 },
-    { header: "Fecha Publicación", key: "fechaVigencia" },
+    { header: "Subjects", key: "subjects", render: (v) => v.subjects?.length || 0 },
+    { header: "Credits", key: "credits", render: (v) => v.subjects?.reduce((acc, a) => acc + (a.credits || 0), 0) || 0 },
+    { header: "Published At", key: "published_at" },
   ];
 
   /*Configuración de la Tabla Genérica para el Formulario de Edición */
@@ -240,10 +268,10 @@ const PlanEstudioPage: React.FC = () => {
             setAsignaturaEnEdicion(prev => {
               if (!prev) return null;
               const next = { ...prev };
-              if (row.key === 'nombre' || row.key === 'codigo') {
-                next.asignatura = { ...prev.asignatura!, [row.key === 'nombre' ? 'nombre' : 'codigo']: val };
+              if (row.key === 'name' || row.key === 'code') {
+                if (next.subject) next.subject = { ...next.subject, [row.key]: val } as Subject;
               } else {
-                (next as any)[row.key] = (row.key === 'creditos' || row.key === 'semestreSugerido') ? Number(val) : val;
+                (next as any)[row.key] = (row.key === 'credits' || row.key === 'suggested_semester') ? Number(val) : val;
               }
               return next;
             });
@@ -254,23 +282,27 @@ const PlanEstudioPage: React.FC = () => {
   ];
 
   const editFormData = asignaturaEnEdicion ? [
-    { etiqueta: "Nombre de Asignatura", valor: asignaturaEnEdicion.asignatura?.name, key: "nombre" },
-    { etiqueta: "Código Interno", valor: asignaturaEnEdicion.asignatura?.code, key: "codigo" },
-    { etiqueta: "Semestre Sugerido", valor: asignaturaEnEdicion.semestreSugerido, key: "semestreSugerido" },
-    { etiqueta: "Créditos en el Plan", valor: asignaturaEnEdicion.creditos, key: "creditos" },
+    { etiqueta: "Subject Name", valor: asignaturaEnEdicion.subject?.name, key: "name" },
+    { etiqueta: "Internal Code", valor: asignaturaEnEdicion.subject?.code, key: "code" },
+    { etiqueta: "Suggested Semester", valor: asignaturaEnEdicion.suggested_semester, key: "suggested_semester" },
+    { etiqueta: "Credits", valor: asignaturaEnEdicion.credits, key: "credits" },
   ] : [];
 
   // Configuración de columnas para la tabla de catálogo (dentro del modal)
   const catalogColumns: TableColumn<Subject>[] = [
-    { header: "", key: "codigo", render: (a) => <span className="font-mono text-xs text-gray-500">{a.code}</span> },
-    { header: "", key: "nombre", render: (a) => <span className="text-sm font-medium text-gray-800 dark:text-white/90">{a.name}</span> },
-    { header: "", key: "creditosBase" },
+    { header: "", key: "code", render: (a) => <span className="font-mono text-xs text-gray-500">{a.code}</span> },
+    { header: "", key: "name", render: (a) => <span className="text-sm font-medium text-gray-800 dark:text-white/90">{a.name}</span> },
+    { header: "", key: "credits" },
     { 
       header: "", 
       key: "add", 
       render: (a) => (
         <button 
-          onClick={() => console.log("Asignatura seleccionada para añadir:", a)}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            manejarVincularAsignatura(a);
+          }}
           className="text-brand-500 hover:text-brand-600 transition-colors p-1"
           title="Añadir al plan"
         >
@@ -304,7 +336,7 @@ const PlanEstudioPage: React.FC = () => {
 
   const publishFormData = [
     { etiqueta: "Año de la nueva versión", valor: añoNuevaVersion, key: "añoNuevaVersion" },
-    { etiqueta: "Advertencia", valor: `Al publicar una nueva versión se reemplazará la versión anterior (${planSeleccionado?.numeroVersionActual}) como la vigente.`, key: "advertencia" },
+    { etiqueta: "Advertencia", valor: `Al publicar una nueva versión se reemplazará la versión anterior (${planSeleccionado?.year}) como la vigente.`, key: "advertencia" },
   ];
 
   /* --------------------------------------------------------------------------------------- */
@@ -320,9 +352,6 @@ const PlanEstudioPage: React.FC = () => {
           <p className="text-sm text-gray-500 dark:text-gray-400">Seleccione una carrera para gestionar su plan de estudios vigente.</p>
         </div>
       </div>
-      {/* ----------------------------------------------------------------------------------- */}
-      {/* MODIFICACIÓN: Uso de GenericTable para el listado de Carreras                       */}
-      {/* ----------------------------------------------------------------------------------- */}
       <DataTable 
         title="Carreras" 
         columns={careerColumns} 
@@ -334,28 +363,26 @@ const PlanEstudioPage: React.FC = () => {
 
   // Vista 2: Gestión del Plan de Estudios de la carrera seleccionada
   const renderEditView = () => {
-    const totalCreditos = planSeleccionado?.asignaturasVigentes?.reduce((acc, s) => acc + s.creditos, 0) || 0;
+    const totalCredits = planSeleccionado?.subjects?.reduce((acc: number, s: AsignaturaPlan) => acc + (s.credits || 0), 0) || 0;
 
-    // Preparamos los datos basados en la interfaz DetallesPlan
     const detalles: DetallesPlan = {
-      carrera: carreraSeleccionada?.nombre || "",
-      añoVersion: planSeleccionado?.numeroVersionActual || 0,
-      estado: planSeleccionado?.estado === EstadoPlan.VIGENTE,
-      totalAsignaturas: planSeleccionado?.asignaturasVigentes?.length || 0,
-      totalCreditos: totalCreditos,
-      ultimaActualizacion: planSeleccionado?.updatedAt || "No disponible",
-      actualizadoPor: "Administrador Central", // Mock de usuario
+      career: carreraSeleccionada?.name || "",
+      year: planSeleccionado?.year || 0,
+      is_active: planSeleccionado?.state === EstadoPlan.VIGENTE,
+      total_subjects: planSeleccionado?.subjects?.length || 0,
+      total_credits: totalCredits,
+      last_update: planSeleccionado?.updated_at || "No disponible",
+      updated_by: "Administrador Central",
     };
 
-    // Transformamos los detalles en filas para la GenericTable
     const filasDetalles = [
-      { atributo: "Carrera", valor: detalles.carrera },
-      { atributo: "Año Versión", valor: detalles.añoVersion },
-      { atributo: "Estado", valor: detalles.estado ? "Vigente" : "Borrador" },
-      { atributo: "Asignaturas", valor: detalles.totalAsignaturas },
-      { atributo: "Total Créditos", valor: detalles.totalCreditos },
-      { atributo: "Actualizado", valor: detalles.ultimaActualizacion },
-      { atributo: "Responsable", valor: detalles.actualizadoPor },
+      { atributo: "Carrera", valor: detalles.career },
+      { atributo: "Año Versión", valor: detalles.year },
+      { atributo: "Estado", valor: detalles.is_active ? "Vigente" : "Borrador" },
+      { atributo: "Asignaturas", valor: detalles.total_subjects },
+      { atributo: "Total Créditos", valor: detalles.total_credits },
+      { atributo: "Actualizado", valor: detalles.last_update },
+      { atributo: "Responsable", valor: detalles.updated_by },
     ];
 
     const columnasDetalles: TableColumn<(typeof filasDetalles)[0]>[] = [
@@ -373,12 +400,12 @@ const PlanEstudioPage: React.FC = () => {
             </button>
             <div>
               <h1 className="text-2xl font-bold text-gray-800 dark:text-white/90">
-                {carreraSeleccionada?.nombre}
+                {carreraSeleccionada?.name}
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Versión {planSeleccionado?.numeroVersionActual} • Estado: 
-                <span className={`ml-2 px-2 py-0.5 rounded text-xs ${planSeleccionado?.estado === EstadoPlan.VIGENTE ? 'bg-success-500/10 text-success-500' : 'bg-warning-500/10 text-warning-500'}`}>
-                  {planSeleccionado?.estado === EstadoPlan.VIGENTE ? 'Vigente (Activo)' : 'Borrador'}
+                Year {planSeleccionado?.year} • Status: 
+                <span className={`ml-2 px-2 py-0.5 rounded text-xs ${planSeleccionado?.state === EstadoPlan.VIGENTE ? 'bg-success-500/10 text-success-500' : 'bg-warning-500/10 text-warning-500'}`}>
+                  {planSeleccionado?.state === EstadoPlan.VIGENTE ? 'Vigente (Activo)' : 'Borrador'}
                 </span>
               </p>
             </div>
@@ -407,14 +434,14 @@ const PlanEstudioPage: React.FC = () => {
 
             <DataTable 
               columns={subjectColumns} 
-              data={planSeleccionado?.asignaturasVigentes || []} 
+              data={planSeleccionado?.subjects || []} 
               emptyMessage="Este plan de estudios no tiene asignaturas vinculadas aún." 
             />
 
             <div className="flex justify-end p-4 bg-gray-50 dark:bg-white/[0.02] rounded-xl border border-gray-200 dark:border-gray-800">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Total de Créditos del Plan: <span className="text-brand-500 text-lg ml-2 font-bold">
-                  {totalCreditos}
+                  {totalCredits}
                 </span>
               </p>        
             </div>
@@ -453,26 +480,37 @@ const PlanEstudioPage: React.FC = () => {
               <input 
                 type="text" 
                 placeholder="Ej: Matemáticas, Física..." 
+                value={terminoBusqueda}
+                onChange={(e) => setTerminoBusqueda(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent px-4 py-2 text-sm focus:border-brand-500 outline-none"
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-400 mb-1">Semestre sugerido</label>
+              <input 
+                type="number" 
+                min="1"
+                max="12"
+                value={semestreSugeridoModal}
+                onChange={(e) => setSemestreSugeridoModal(Number(e.target.value))}
+                className="w-24 rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent px-4 py-2 text-sm focus:border-brand-500 outline-none"
+              />
+              <span className="ml-3 text-xs text-gray-500 italic">Las materias se añadirán al semestre indicado aquí.</span>
             </div>
           </div>
 
           <div className="mt-4 max-h-[350px] overflow-y-auto custom-scrollbar">
             <DataTable 
               columns={catalogColumns} 
-              data={catalogo} 
+              data={catalogoFiltrado} 
               emptyMessage="No se encontraron asignaturas en el catálogo global."
             />
           </div>
 
           <div className="flex justify-end gap-3 mt-8">
             <Button variant="outline" size="sm" onClick={closeModal}>Cancelar</Button>
-            <Button variant="primary" size="sm" onClick={closeModal}>Vincular Asignatura</Button>
+            <Button variant="primary" size="sm" onClick={closeModal}>Finalizar</Button>
           </div>
         </div>
       </Modal>
@@ -516,7 +554,7 @@ const PlanEstudioPage: React.FC = () => {
           
           <DataTable 
             columns={historyColumns} 
-            data={planSeleccionado?.versionesHistorico || []} 
+            data={planSeleccionado?.history || []} 
             emptyMessage="No hay versiones anteriores registradas para esta carrera."
           />
 
