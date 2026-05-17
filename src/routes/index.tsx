@@ -51,6 +51,12 @@ const AssignTeacher = lazy(
     () => import("../pages/Grupos/AgregarTeacher")
 );
 
+const FinalizarNotas = lazy(
+    () => import("../pages/Grupos/FinalizarNotas")
+);
+
+const ConsultarRubrica = lazy(() => import("../pages/Evaluaciones/ConsultarRubrica"));
+
 
 // ======================================================
 // 🔹 RUTAS
@@ -177,6 +183,16 @@ const coreRoutes = [
         path: "/groups/manage/:groupId", 
         title: "Asignar Docente a Grupo", 
         component: AssignTeacher 
+    },
+    {
+        path: "/groups/finalizar/:groupId",
+        title: "Registrar Nota Final",
+        component: FinalizarNotas,
+    },
+    {
+        path: "/evaluations/:evaluationId/rubrica",
+        title: "Consultar Rúbrica",
+        component: ConsultarRubrica,
     },
 
 ];

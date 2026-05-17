@@ -55,6 +55,128 @@ class SecurityService extends EventTarget {
     throw new Error("Credenciales inválidas");
 }
 
+    /**
+     * Inicia el flujo de autenticación con GitHub
+     */
+    loginWithGithub() {
+        const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "your_github_client_id";
+        const redirectUri = `${window.location.origin}/auth/github/callback`;
+        const scope = "user:email";
+        
+        const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
+        
+        // Abre una ventana popup
+        window.location.href = githubAuthUrl;
+    }
+
+    /**
+     * Maneja el callback de autenticación con GitHub
+     */
+    async handleGithubCallback(code: string) {
+        try {
+            console.log("SecurityService: Handling GitHub callback with code:", code);
+            
+            const endpoint = `${this.API_URL}/auth/github`;
+            console.log("SecurityService: Calling endpoint:", endpoint);
+            
+            const response = await axios.post(endpoint, { code });
+            
+            console.log("SecurityService: GitHub response:", response.data);
+            
+            if (response.status === 200) {
+                const { user, access_token } = response.data.data || response.data;
+                
+                if (!user || !access_token) {
+                    throw new Error("Invalid response format: missing user or access_token");
+                }
+                
+                this.user = user;
+                this.storage.setItem(this.keyToken, access_token);
+                this.storage.setItem(this.userKey, JSON.stringify(user));
+                store.dispatch(setUser(user));
+                
+                console.log("SecurityService: GitHub authentication successful");
+                return user;
+            }
+        } catch (error: any) {
+            console.error("SecurityService: GitHub authentication error:", error);
+            const message = error.response?.data?.message || error.message || "GitHub authentication failed";
+            throw new Error(message);
+        }
+    }
+
+    /**
+     * Maneja el callback de autenticación con Google
+     */
+    async handleGoogleCallback(code: string) {
+        try {
+            console.log("SecurityService: Handling Google callback with code:", code);
+            
+            const endpoint = `${this.API_URL}/auth/google`;
+            console.log("SecurityService: Calling endpoint:", endpoint);
+            
+            const response = await axios.post(endpoint, { code });
+            
+            console.log("SecurityService: Google response:", response.data);
+            
+            if (response.status === 200) {
+                const { user, access_token } = response.data.data || response.data;
+                
+                if (!user || !access_token) {
+                    throw new Error("Invalid response format: missing user or access_token");
+                }
+                
+                this.user = user;
+                this.storage.setItem(this.keyToken, access_token);
+                this.storage.setItem(this.userKey, JSON.stringify(user));
+                store.dispatch(setUser(user));
+                
+                console.log("SecurityService: Google authentication successful");
+                return user;
+            }
+        } catch (error: any) {
+            console.error("SecurityService: Google authentication error:", error);
+            const message = error.response?.data?.message || error.message || "Google authentication failed";
+            throw new Error(message);
+        }
+    }
+
+    /**
+     * Maneja el callback de autenticación con X
+     */
+    async handleXCallback(code: string) {
+        try {
+            console.log("SecurityService: Handling X callback with code:", code);
+            
+            const endpoint = `${this.API_URL}/auth/x`;
+            console.log("SecurityService: Calling endpoint:", endpoint);
+            
+            const response = await axios.post(endpoint, { code });
+            
+            console.log("SecurityService: X response:", response.data);
+            
+            if (response.status === 200) {
+                const { user, access_token } = response.data.data || response.data;
+                
+                if (!user || !access_token) {
+                    throw new Error("Invalid response format: missing user or access_token");
+                }
+                
+                this.user = user;
+                this.storage.setItem(this.keyToken, access_token);
+                this.storage.setItem(this.userKey, JSON.stringify(user));
+                store.dispatch(setUser(user));
+                
+                console.log("SecurityService: X authentication successful");
+                return user;
+            }
+        } catch (error: any) {
+            console.error("SecurityService: X authentication error:", error);
+            const message = error.response?.data?.message || error.message || "X authentication failed";
+            throw new Error(message);
+        }
+    }
+
     logout() {
         this.storage.clear();
         store.dispatch(setUser(null));

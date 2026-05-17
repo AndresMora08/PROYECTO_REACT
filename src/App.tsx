@@ -27,6 +27,15 @@ from "./pages/AuthPages/SignIn";
 import SignUp
 from "./pages/AuthPages/SignUp";
 
+import GithubCallback
+from "./pages/AuthPages/GithubCallback";
+
+import GoogleCallback
+from "./pages/AuthPages/GoogleCallback";
+
+import XCallback
+from "./pages/AuthPages/XCallback";
+
 import NotFound
 from "./pages/OtherPage/NotFound";
 
@@ -208,6 +217,22 @@ const App: React.FC = () => {
                 <Route
                     path="/signup"
                     element={<SignUp />}
+                />
+
+                {/* OAuth Callbacks */}
+                <Route
+                    path="/auth/github/callback"
+                    element={<GithubCallback />}
+                />
+
+                <Route
+                    path="/auth/google/callback"
+                    element={<GoogleCallback />}
+                />
+
+                <Route
+                    path="/auth/x/callback"
+                    element={<XCallback />}
                 />
 
                 {/* ===================================== */}
