@@ -32,9 +32,53 @@ export interface RegisterTeacherDTO {
 class UserService {
     async getUsers(): Promise<User[]> {
         try {
-            const response = await axios.get(API_URL);
+            const [usersResponse, students, teachers] = await Promise.all([
+                axios.get(API_URL),
+                this.getStudents(),
+                this.getTeachers(),
+            ]);
+
             // Acceso seguro: soporta si la API devuelve el array directo o envuelto en .data
-            return response.data.data ?? response.data ?? [];
+            const users = usersResponse.data.data ?? usersResponse.data ?? [];
+
+            return users.map((user: User) => {
+                const normalizedRole = String(user.role ?? "").toUpperCase();
+
+                if (normalizedRole === "STUDENT" || user.code?.startsWith("STU")) {
+                    const studentProfile = students.find((student) => student.user_id === user.id);
+
+                    if (studentProfile) {
+                        return {
+                            ...user,
+                            first_name: studentProfile.first_name,
+                            last_name: studentProfile.last_name,
+                            identification: studentProfile.identification,
+                            user_id: studentProfile.user_id,
+                            matriculas: studentProfile.matriculas,
+                            inscripciones: studentProfile.inscripciones,
+                            calificaciones: studentProfile.calificaciones,
+                        };
+                    }
+                }
+
+                if (normalizedRole === "TEACHER" || user.code?.startsWith("TCH")) {
+                    const teacherProfile = teachers.find((teacher) => teacher.user_id === user.id);
+
+                    if (teacherProfile) {
+                        return {
+                            ...user,
+                            first_name: teacherProfile.first_name,
+                            last_name: teacherProfile.last_name,
+                            identification: teacherProfile.identification,
+                            phone: teacherProfile.phone,
+                            specialty: teacherProfile.specialty,
+                            user_id: teacherProfile.user_id,
+                        };
+                    }
+                }
+
+                return user;
+            });
         } catch (error) {
             console.error("Error al obtener usuarios:", error);
             return [];

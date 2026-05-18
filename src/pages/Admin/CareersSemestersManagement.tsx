@@ -382,7 +382,7 @@ const CareersSemestersManagement: React.FC = () => {
         semester.id !== semesterIdToKeep &&
         semester.status === "activo"
       ) {
-        return { ...semester, status: "cerrado", updatedAt: timestamp };
+        return { ...semester, status: "cerrado" as const, updatedAt: timestamp };
       }
       return semester;
     });
