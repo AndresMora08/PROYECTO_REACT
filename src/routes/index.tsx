@@ -1,52 +1,72 @@
-
 import { lazy } from "react";
+
+// ======================================================
+// 🔹 ADMIN
+// ======================================================
 
 const AdminHub = lazy(() => import("../pages/Admin/AdminHub"));
 const UsersManagement = lazy(() => import("../pages/Admin/UsersManagement"));
+
 const CareersSemestersManagement = lazy(
     () => import("../pages/Admin/CareersSemestersManagement")
 );
+
 const StudyPlanManagement = lazy(
     () => import("../pages/Admin/StudyPlanManagement")
 );
+
 const MatriculasManagement = lazy(
     () => import("../pages/Admin/MatriculasManagement")
 );
+
 const InscripcionesManagement = lazy(
     () => import("../pages/Admin/InscripcionesManagement")
 );
+
 const RubricasManagement = lazy(
     () => import("../pages/Admin/RubricasManagement")
 );
-const SubjectList = lazy(() => import("../pages/Asignaturas/ListAsignaturas"));
-const SubjectCreate = lazy(() => import("../pages/Asignaturas/CreateAsignaturas"));
-const SubjectUpdate = lazy(() => import("../pages/Asignaturas/UpdateAsignaturas"));
+
+// ======================================================
+// 🔹 ASIGNATURAS
+// ======================================================
+
+const SubjectList = lazy(
+    () => import("../pages/Asignaturas/ListAsignaturas")
+);
+
+const SubjectCreate = lazy(
+    () => import("../pages/Asignaturas/CreateAsignaturas")
+);
+
+const SubjectUpdate = lazy(
+    () => import("../pages/Asignaturas/UpdateAsignaturas")
+);
 
 // ======================================================
 // 🔹 USERS
 // ======================================================
 
-// 🔹 LISTADO
 const UserList = lazy(
     () => import("../pages/Users/ListUsers")
 );
 
-// 🔹 CREAR
 const UserCreate = lazy(
     () => import("../pages/Users/CreateUsers")
 );
 
-// 🔹 EDITAR
 const UserUpdate = lazy(
     () => import("../pages/Users/UpdateUsers")
 );
 
 // ======================================================
-// 🔹 GRUPOS (NUEVOS COMPONENTES)
+// 🔹 GRUPOS
 // ======================================================
+
 const ListGroups = lazy(
     () => import("../pages/Grupos/ListGroupsCU-05")
 );
+
 const AssignTeacher = lazy(
     () => import("../pages/Grupos/AgregarTeacher")
 );
@@ -55,9 +75,53 @@ const FinalizarNotas = lazy(
     () => import("../pages/Grupos/FinalizarNotas")
 );
 
-const ConsultarRubrica = lazy(() => import("../pages/Evaluaciones/ConsultarRubrica"));
+// ======================================================
+// 🔹 EVALUACIONES Y RÚBRICAS
+// ======================================================
 
+const ConsultarRubrica = lazy(
+    () => import("../pages/evaluaciones/ConsultarRubrica")
+);
 
+const SelectEvaluation = lazy(
+    () => import("../pages/evaluaciones/SelectEvaluation")
+);
+
+const AssignRubricEvaluation = lazy(
+    () => import("../pages/evaluaciones/AssignRubricEvaluation")
+);
+
+// ======================================================
+// 🔹 DEFINIR CRITERIOS Y ESCALAS (CU-09)
+// ======================================================
+
+const Step1_SelectRubric = lazy(
+    () => import("../pages/rubricas/selectRubric")
+);
+
+const Step2_SelectCriterion = lazy(
+    () => import("../pages/rubricas/selectCriterion")
+);
+
+const Step3_DefineScales = lazy(
+    () => import("../pages/rubricas/defineScales")
+);
+
+ // ======================================================
+ // 🔹 CALIFICACIONES CON RÚBRICA (CU-11)
+ // ======================================================
+
+const CU11_Step1_SelectStudent = lazy(
+    () => import("../pages/rubricas/selectStudent")
+);
+
+const CU11_Step2_EvaluateCriteria = lazy(
+    () => import("../pages/rubricas/evaluateCriteria")
+);
+
+const CU11_Step3_ReviewSend = lazy(
+    () => import("../pages/rubricas/reviewSend")
+);
 // ======================================================
 // 🔹 RUTAS
 // ======================================================
@@ -163,38 +227,126 @@ const coreRoutes = [
         title: "Editar Usuario",
         component: UserUpdate,
     },
-    
+
     // =========================================
     // 🔹 ASIGNATURAS
     // =========================================
-    { path: "/subjects/list",        title: "Asignaturas",          component: SubjectList },
-    { path: "/subjects/create",      title: "Nueva Asignatura",     component: SubjectCreate },
-    { path: "/subjects/update/:id",  title: "Editar Asignatura",    component: SubjectUpdate },
+
+    {
+        path: "/subjects/list",
+        title: "Asignaturas",
+        component: SubjectList,
+    },
+
+    {
+        path: "/subjects/create",
+        title: "Nueva Asignatura",
+        component: SubjectCreate,
+    },
+
+    {
+        path: "/subjects/update/:id",
+        title: "Editar Asignatura",
+        component: SubjectUpdate,
+    },
 
     // =========================================
     // 🔹 GRUPOS ACADÉMICOS
     // =========================================
-    { 
-        path: "/groups/list", 
-        title: "Grupos Académicos", 
-        component: ListGroups 
+
+    {
+        path: "/groups/list",
+        title: "Grupos Académicos",
+        component: ListGroups,
     },
-    { 
-        path: "/groups/manage/:groupId", 
-        title: "Asignar Docente a Grupo", 
-        component: AssignTeacher 
+
+    {
+        path: "/groups/manage/:groupId",
+        title: "Asignar Docente a Grupo",
+        component: AssignTeacher,
     },
+
     {
         path: "/groups/finalizar/:groupId",
         title: "Registrar Nota Final",
         component: FinalizarNotas,
     },
+
+    // =========================================
+    // 🔹 CONSULTAR RÚBRICA
+    // =========================================
+
     {
         path: "/evaluations/:evaluationId/rubrica",
         title: "Consultar Rúbrica",
         component: ConsultarRubrica,
     },
 
+    // =========================================
+    // 🔹 EVALUACIONES (CU-10)
+    // =========================================
+
+    {
+        path: "/evaluations/list",
+        title: "Seleccionar Evaluación",
+        component: SelectEvaluation,
+    },
+
+    {
+        path: "/evaluations/:evaluationId/assign-rubric",
+        title: "Asignar Rúbrica",
+        component: AssignRubricEvaluation,
+    },
+
+    // =========================================
+    // 🔹 DEFINIR CRITERIOS Y ESCALAS (CU-09)
+    // =========================================
+
+    {
+        path: "/rubrics/define-scales",
+        title: "Seleccionar Rúbrica — CU-09",
+        component: Step1_SelectRubric,
+    },
+
+    {
+        path: "/rubrics/:rubricId/define-scales/criteria",
+        title: "Seleccionar Criterio — CU-09",
+        component: Step2_SelectCriterion,
+    },
+
+    {
+        path: "/rubrics/:rubricId/define-scales/criteria/:criterionId/scales",
+        title: "Definir Escalas — CU-09",
+        component: Step3_DefineScales,
+    },
+
+        // =========================================
+    // 🔹 CALIFICAR CON RÚBRICA (CU-11)
+    // =========================================
+
+    {
+        path: "/evaluations/:evaluationId/calificar",
+        title: "Seleccionar Estudiante",
+        component: CU11_Step1_SelectStudent,
+    },
+
+    {
+        path: "/evaluations/calificar",
+        title: "Seleccionar Evaluación",
+        component: CU11_Step1_SelectStudent,
+    },
+
+    {
+        path: "/evaluations/:evaluationId/calificar/:enrollmentId/criterios",
+        title: "Evaluar Criterios",
+        component: CU11_Step2_EvaluateCriteria,
+    },
+
+    {
+        path: "/evaluations/:evaluationId/calificar/:enrollmentId/revisar/:gradeId",
+        title: "Revisar y Enviar Calificación",
+        component: CU11_Step3_ReviewSend,
+    },
 ];
 
 const routes = [...coreRoutes];

@@ -1,26 +1,10 @@
-/* ========================================================================================= */
-/* Modelo de Plan de Estudio                                                                 */
-/* ========================================================================================= */
 import { Subject } from "./Asignatura";
 import { Carrera } from "./Carrera";
 
-export enum EstadoPlan {
-  VIGENTE = "vigente",
-  HISTORICO = "historico",
-  ARCHIVADO = "archivado",
-  BORRADOR = "borrador"
-}
+export type EstadoPlan = "vigente" | "borrador";
 
-export interface AsignaturaPlan {
-  id: string;
-  subject_id: string;
-  suggested_semester: number;
-  credits: number;
-  is_required: boolean;
-  created_at: string;
+export interface AsignaturaPlan extends Subject {
   subject?: Subject;
-  // Auxiliar de UI para validación E1
-  has_active_enrollments?: boolean;
 }
 
 export interface VersionPlanEstudio {
@@ -37,8 +21,10 @@ export interface VersionPlanEstudio {
 export interface PlanEstudio {
   id: string;
   career_id: string;
+  name: string;
   year: number;
-  state: EstadoPlan;
+  suggested_semester: number;
+  is_published: boolean;
   created_at: string;
   updated_at: string;
   career?: Carrera;
@@ -47,11 +33,11 @@ export interface PlanEstudio {
 }
 
 export interface DetallesPlan {
-    career: string;
-    year: number;
-    is_active: boolean;
-    total_subjects: number;
-    total_credits: number;
-    last_update: string;
-    updated_by: string;
+  career: string;
+  year: number;
+  is_active: boolean;
+  total_subjects: number;
+  total_credits: number;
+  last_update: string;
+  updated_by: string;
 }
