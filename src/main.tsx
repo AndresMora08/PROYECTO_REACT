@@ -6,10 +6,8 @@ import "flatpickr/dist/flatpickr.css";
 import App from "./App.tsx";
 import { AppWrapper } from "./components/common/PageMeta.tsx";
 import { ThemeProvider } from "./context/ThemeContext.tsx";
-
-// 💡 1. Importar el Provider de Redux y tu store
 import { Provider } from "react-redux";
-import { store } from "./store/store"; // 👈 Asegúrate de que esta ruta apunte a tu archivo store.ts
+import { store } from "./store/store";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
