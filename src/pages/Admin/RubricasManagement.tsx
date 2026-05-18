@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import Swal from "sweetalert2";
+import { Subject } from "../../models/Asignatura";
+import { subjectService } from "../../service/subjectService";
 
 type SubjectOption = {
   id: string;
@@ -31,13 +33,6 @@ type RubricRecord = {
   updatedAt: string;
 };
 
-const subjectCatalog: SubjectOption[] = [
-  { id: "asig-1", nombre: "Programación I", codigo: "PRO-101" },
-  { id: "asig-2", nombre: "Matemática I", codigo: "MAT-101" },
-  { id: "asig-3", nombre: "Bases de Datos", codigo: "BD-201" },
-  { id: "asig-4", nombre: "Redes", codigo: "RED-201" },
-];
-
 const initialCriteria: CriterionForm[] = [
   {
     id: crypto.randomUUID(),
@@ -50,14 +45,44 @@ const initialCriteria: CriterionForm[] = [
 const RubricasManagement: React.FC = () => {
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [asignaturaId, setAsignaturaId] = useState(subjectCatalog[0].id);
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
+  const [asignaturaId, setAsignaturaId] = useState("");
   const [criterios, setCriterios] = useState<CriterionForm[]>(initialCriteria);
   const [rubricas, setRubricas] = useState<RubricRecord[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const loadSubjects = async () => {
+      setIsLoadingSubjects(true);
+      try {
+        const response = await subjectService.getSubjects();
+        const mapped = (Array.isArray(response) ? response : []).map((subject: Subject | any) => ({
+          id: String(subject.id),
+          nombre: subject.name ?? subject.nombre ?? "Sin nombre",
+          codigo: subject.code ?? subject.codigo ?? "SIN-CODIGO",
+        }));
+
+        setSubjects(mapped);
+        setAsignaturaId((current) => current || mapped[0]?.id || "");
+      } catch (error) {
+        console.error("Error al cargar asignaturas:", error);
+        Swal.fire({
+          icon: "error",
+          title: "No se pudieron cargar las asignaturas",
+          text: "Verifica que el backend esté activo y que existan materias creadas.",
+        });
+      } finally {
+        setIsLoadingSubjects(false);
+      }
+    };
+
+    loadSubjects();
+  }, []);
+
   const selectedSubject = useMemo(
-    () => subjectCatalog.find((subject) => subject.id === asignaturaId),
-    [asignaturaId]
+    () => subjects.find((subject) => subject.id === asignaturaId),
+    [asignaturaId, subjects]
   );
 
   const totalWeight = useMemo(() => {
@@ -70,7 +95,7 @@ const RubricasManagement: React.FC = () => {
   const resetForm = () => {
     setTitulo("");
     setDescripcion("");
-    setAsignaturaId(subjectCatalog[0].id);
+    setAsignaturaId(subjects[0]?.id ?? "");
     setCriterios([
       {
         id: crypto.randomUUID(),
@@ -288,14 +313,21 @@ const RubricasManagement: React.FC = () => {
             <select
               value={asignaturaId}
               onChange={(e) => setAsignaturaId(e.target.value)}
-              className="w-full rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedrokedark dark:bg-form-input dark:text-white"
+              disabled={isLoadingSubjects || subjects.length === 0}
+              className="w-full rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
             >
-              {subjectCatalog.map((subject) => (
+              <option value="">-- Selecciona una asignatura --</option>
+              {subjects.map((subject) => (
                 <option key={subject.id} value={subject.id}>
                   {subject.codigo} - {subject.nombre}
                 </option>
               ))}
             </select>
+            {!isLoadingSubjects && subjects.length === 0 && (
+              <p className="mt-1 text-xs text-red-500">
+                No hay asignaturas disponibles para asociar.
+              </p>
+            )}
           </div>
           <div className="md:col-span-2">
             <label className="mb-2 block text-sm font-medium text-black dark:text-white">
@@ -418,14 +450,16 @@ const RubricasManagement: React.FC = () => {
           <button
             type="button"
             onClick={() => saveRubric("publicada")}
-            disabled={totalWeight !== 100 || criterios.length === 0}
+            disabled={isLoadingSubjects || subjects.length === 0 || totalWeight !== 100 || criterios.length === 0}
             className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
-              totalWeight === 100 && criterios.length > 0
+              !isLoadingSubjects && subjects.length > 0 && totalWeight === 100 && criterios.length > 0
                 ? "bg-primary hover:bg-opacity-90"
                 : "cursor-not-allowed bg-gray-400 dark:bg-gray-600"
             }`}
             title={
-              criterios.length === 0
+              isLoadingSubjects || subjects.length === 0
+                ? "Cargando asignaturas o no hay materias disponibles"
+                : criterios.length === 0
                 ? "Agrega al menos un criterio"
                 : totalWeight !== 100
                 ? `La suma debe ser 100% (actual: ${totalWeight}%)`
