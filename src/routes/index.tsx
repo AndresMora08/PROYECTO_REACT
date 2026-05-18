@@ -80,15 +80,15 @@ const FinalizarNotas = lazy(
 // ======================================================
 
 const ConsultarRubrica = lazy(
-    () => import("../pages/evaluaciones/ConsultarRubrica")
+    () => import("../pages/Evaluaciones/ConsultarRubrica")
 );
 
 const SelectEvaluation = lazy(
-    () => import("../pages/evaluaciones/SelectEvaluation")
+    () => import("../pages/Evaluaciones/SelectEvaluation")
 );
 
 const AssignRubricEvaluation = lazy(
-    () => import("../pages/evaluaciones/AssignRubricEvaluation")
+    () => import("../pages/Evaluaciones/AssignRubricEvaluation")
 );
 
 // ======================================================
