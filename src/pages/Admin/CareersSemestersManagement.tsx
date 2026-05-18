@@ -1,65 +1,134 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import Swal from "sweetalert2";
 
 type Career = {
-  id: number;
+  id: string;
   name: string;
   code: string;
   description: string;
   archived: boolean;
   hasEnrolledStudents: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type Semester = {
-  id: number;
-  careerId: number;
+  id: string;
+  careerId: string;
   name: string;
+  code: string;
   startDate: string;
   endDate: string;
   status: "activo" | "cerrado";
+  createdAt: string;
+  updatedAt: string;
+};
+
+const nowIso = () => new Date().toISOString();
+
+const generateId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}`;
+};
+
+const formatDateTime = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
 };
 
 const initialCareers: Career[] = [
   {
-    id: 1,
+    id: "career-1",
     name: "Ingeniería de Sistemas",
     code: "IS-001",
     description: "Carrera base del catálogo académico.",
     archived: false,
     hasEnrolledStudents: false,
+    createdAt: "2026-01-02T09:00:00.000Z",
+    updatedAt: "2026-01-02T09:00:00.000Z",
+  },
+  {
+    id: "career-2",
+    name: "Contaduría Pública",
+    code: "CP-001",
+    description: "Carrera con matrículas activas para validar restricción.",
+    archived: false,
+    hasEnrolledStudents: true,
+    createdAt: "2026-01-03T09:00:00.000Z",
+    updatedAt: "2026-01-03T09:00:00.000Z",
   },
 ];
 
 const initialSemesters: Semester[] = [
   {
-    id: 1,
-    careerId: 1,
+    id: "semester-1",
+    careerId: "career-1",
     name: "2026-1",
+    code: "S-2026-1",
     startDate: "2026-01-15",
     endDate: "2026-06-20",
     status: "activo",
+    createdAt: "2026-01-10T09:00:00.000Z",
+    updatedAt: "2026-01-10T09:00:00.000Z",
+  },
+  {
+    id: "semester-2",
+    careerId: "career-2",
+    name: "2026-A",
+    code: "S-2026-A",
+    startDate: "2026-01-20",
+    endDate: "2026-06-25",
+    status: "cerrado",
+    createdAt: "2026-01-10T10:00:00.000Z",
+    updatedAt: "2026-01-10T10:00:00.000Z",
   },
 ];
 
 const CareersSemestersManagement: React.FC = () => {
   const [careers, setCareers] = useState<Career[]>(initialCareers);
   const [semesters, setSemesters] = useState<Semester[]>(initialSemesters);
+  const [editingCareerId, setEditingCareerId] = useState<string | null>(null);
+  const [editingSemesterId, setEditingSemesterId] = useState<string | null>(null);
   const [careerForm, setCareerForm] = useState({
     name: "",
     code: "",
     description: "",
   });
   const [semesterForm, setSemesterForm] = useState({
-    careerId: 1,
+    careerId: initialCareers[0]?.id ?? "",
     name: "",
+    code: "",
     startDate: "",
     endDate: "",
     status: "activo" as "activo" | "cerrado",
   });
 
+  const availableCareers = useMemo(
+    () => careers.filter((career) => !career.archived),
+    [careers]
+  );
+
+  useEffect(() => {
+    if (!availableCareers.length) return;
+
+    const hasCurrentCareer = availableCareers.some(
+      (career) => career.id === semesterForm.careerId
+    );
+
+    if (!hasCurrentCareer) {
+      setSemesterForm((current) => ({
+        ...current,
+        careerId: availableCareers[0].id,
+      }));
+    }
+  }, [availableCareers, semesterForm.careerId]);
+
   const activeSemestersByCareer = useMemo(() => {
-    return semesters.reduce<Record<number, number>>((acc, semester) => {
+    return semesters.reduce<Record<string, number>>((acc, semester) => {
       if (semester.status === "activo") {
         acc[semester.careerId] = (acc[semester.careerId] ?? 0) + 1;
       }
@@ -67,7 +136,7 @@ const CareersSemestersManagement: React.FC = () => {
     }, {});
   }, [semesters]);
 
-  const addCareer = () => {
+  const validateCareerForm = (careerIdToIgnore?: string) => {
     const trimmedName = careerForm.name.trim();
     const trimmedCode = careerForm.code.trim();
 
@@ -77,34 +146,116 @@ const CareersSemestersManagement: React.FC = () => {
         title: "Campos obligatorios",
         text: "Nombre y código son obligatorios.",
       });
-      return;
+      return null;
     }
 
-    if (careers.some((career) => career.code === trimmedCode)) {
+    const duplicate = careers.some(
+      (career) =>
+        career.code.toLowerCase() === trimmedCode.toLowerCase() &&
+        career.id !== careerIdToIgnore
+    );
+
+    if (duplicate) {
       Swal.fire({
         icon: "error",
         title: "Código duplicado",
-        text: "No se puede crear otra carrera con el mismo código.",
+        text: "No se puede crear ni editar una carrera con el mismo código.",
       });
-      return;
+      return null;
     }
+
+    return {
+      name: trimmedName,
+      code: trimmedCode,
+      description: careerForm.description.trim(),
+    };
+  };
+
+  const resetCareerForm = () => {
+    setCareerForm({ name: "", code: "", description: "" });
+    setEditingCareerId(null);
+  };
+
+  const addCareer = () => {
+    const payload = validateCareerForm();
+    if (!payload) return;
+
+    const timestamp = nowIso();
 
     setCareers((current) => [
       ...current,
       {
-        id: Date.now(),
-        name: trimmedName,
-        code: trimmedCode,
-        description: careerForm.description.trim(),
+        id: generateId(),
+        name: payload.name,
+        code: payload.code,
+        description: payload.description,
         archived: false,
         hasEnrolledStudents: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
       },
     ]);
 
-    setCareerForm({ name: "", code: "", description: "" });
+    resetCareerForm();
+
+    Swal.fire({
+      icon: "success",
+      title: "Carrera creada",
+      timer: 1300,
+      showConfirmButton: false,
+    });
   };
 
-  const archiveCareer = (careerId: number) => {
+  const startEditCareer = (career: Career) => {
+    if (career.archived) {
+      Swal.fire({
+        icon: "info",
+        title: "Carrera archivada",
+        text: "No puedes editar una carrera archivada.",
+      });
+      return;
+    }
+
+    setEditingCareerId(career.id);
+    setCareerForm({
+      name: career.name,
+      code: career.code,
+      description: career.description,
+    });
+  };
+
+  const saveCareerEdition = () => {
+    if (!editingCareerId) return;
+    const payload = validateCareerForm(editingCareerId);
+    if (!payload) return;
+
+    const timestamp = nowIso();
+
+    setCareers((current) =>
+      current.map((career) =>
+        career.id === editingCareerId
+          ? {
+              ...career,
+              name: payload.name,
+              code: payload.code,
+              description: payload.description,
+              updatedAt: timestamp,
+            }
+          : career
+      )
+    );
+
+    resetCareerForm();
+
+    Swal.fire({
+      icon: "success",
+      title: "Carrera actualizada",
+      timer: 1300,
+      showConfirmButton: false,
+    });
+  };
+
+  const archiveCareer = async (careerId: string) => {
     const career = careers.find((item) => item.id === careerId);
     if (!career) return;
 
@@ -126,24 +277,56 @@ const CareersSemestersManagement: React.FC = () => {
       return;
     }
 
+    const result = await Swal.fire({
+      icon: "question",
+      title: "Archivar carrera",
+      text: `La carrera ${career.name} dejará de estar disponible para nuevos semestres.`,
+      showCancelButton: true,
+      confirmButtonText: "Sí, archivar",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (!result.isConfirmed) return;
+
+    const timestamp = nowIso();
+
     setCareers((current) =>
       current.map((item) =>
-        item.id === careerId ? { ...item, archived: true } : item
+        item.id === careerId
+          ? { ...item, archived: true, updatedAt: timestamp }
+          : item
       )
     );
+
+    if (editingCareerId === careerId) {
+      resetCareerForm();
+    }
+
+    Swal.fire({
+      icon: "success",
+      title: "Carrera archivada",
+      timer: 1300,
+      showConfirmButton: false,
+    });
   };
 
-  const addSemester = () => {
+  const validateSemesterForm = () => {
     const start = new Date(semesterForm.startDate);
     const end = new Date(semesterForm.endDate);
 
-    if (!semesterForm.name.trim() || !semesterForm.startDate || !semesterForm.endDate) {
+    if (
+      !semesterForm.careerId ||
+      !semesterForm.name.trim() ||
+      !semesterForm.code.trim() ||
+      !semesterForm.startDate ||
+      !semesterForm.endDate
+    ) {
       Swal.fire({
         icon: "warning",
         title: "Campos obligatorios",
-        text: "Debes completar nombre, fecha de inicio y fecha de fin.",
+        text: "Debes completar carrera, nombre, código y fechas.",
       });
-      return;
+      return null;
     }
 
     if (start >= end) {
@@ -152,57 +335,173 @@ const CareersSemestersManagement: React.FC = () => {
         title: "Fechas inválidas",
         text: "La fecha de inicio debe ser menor que la fecha de fin.",
       });
-      return;
+      return null;
     }
 
-    if (semesterForm.status === "activo" && activeSemestersByCareer[semesterForm.careerId]) {
+    const career = careers.find((item) => item.id === semesterForm.careerId);
+    if (!career || career.archived) {
       Swal.fire({
         icon: "error",
-        title: "Solo un semestre activo",
-        text: "Esa carrera ya tiene un semestre activo.",
+        title: "Carrera no disponible",
+        text: "Selecciona una carrera activa para el semestre.",
       });
-      return;
+      return null;
     }
 
-    setSemesters((current) => [
-      ...current,
-      {
-        id: Date.now(),
-        careerId: semesterForm.careerId,
-        name: semesterForm.name.trim(),
-        startDate: semesterForm.startDate,
-        endDate: semesterForm.endDate,
-        status: semesterForm.status,
-      },
-    ]);
-
-    setSemesterForm({
+    return {
       careerId: semesterForm.careerId,
+      name: semesterForm.name.trim(),
+      code: semesterForm.code.trim(),
+      startDate: semesterForm.startDate,
+      endDate: semesterForm.endDate,
+      status: semesterForm.status,
+    };
+  };
+
+  const resetSemesterForm = () => {
+    setSemesterForm((current) => ({
+      careerId: availableCareers[0]?.id ?? current.careerId,
       name: "",
+      code: "",
       startDate: "",
       endDate: "",
       status: "activo",
+    }));
+    setEditingSemesterId(null);
+  };
+
+  const closeOtherActiveSemesters = (
+    currentSemesters: Semester[],
+    careerId: string,
+    semesterIdToKeep: string
+  ) => {
+    const timestamp = nowIso();
+    return currentSemesters.map((semester) => {
+      if (
+        semester.careerId === careerId &&
+        semester.id !== semesterIdToKeep &&
+        semester.status === "activo"
+      ) {
+        return { ...semester, status: "cerrado" as const, updatedAt: timestamp };
+      }
+      return semester;
     });
   };
 
-  const toggleSemesterStatus = (semesterId: number) => {
+  const addSemester = () => {
+    const payload = validateSemesterForm();
+    if (!payload) return;
+
+    const timestamp = nowIso();
+    const newSemester: Semester = {
+      id: generateId(),
+      careerId: payload.careerId,
+      name: payload.name,
+      code: payload.code,
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+      status: payload.status,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+
+    setSemesters((current) => {
+      const next = [...current, newSemester];
+      if (newSemester.status === "activo") {
+        return closeOtherActiveSemesters(next, newSemester.careerId, newSemester.id);
+      }
+      return next;
+    });
+
+    resetSemesterForm();
+
+    Swal.fire({
+      icon: "success",
+      title: "Semestre creado",
+      timer: 1300,
+      showConfirmButton: false,
+    });
+  };
+
+  const startEditSemester = (semester: Semester) => {
+    setEditingSemesterId(semester.id);
+    setSemesterForm({
+      careerId: semester.careerId,
+      name: semester.name,
+      code: semester.code,
+      startDate: semester.startDate,
+      endDate: semester.endDate,
+      status: semester.status,
+    });
+  };
+
+  const saveSemesterEdition = () => {
+    if (!editingSemesterId) return;
+
+    const payload = validateSemesterForm();
+    if (!payload) return;
+
+    const timestamp = nowIso();
+
     setSemesters((current) =>
-      current.map((semester) => {
-        if (semester.id !== semesterId) return semester;
-
-        const nextStatus = semester.status === "activo" ? "cerrado" : "activo";
-        if (nextStatus === "activo" && activeSemestersByCareer[semester.careerId]) {
-          Swal.fire({
-            icon: "error",
-            title: "Regla violada",
-            text: "Solo puede haber un semestre activo por carrera.",
-          });
-          return semester;
-        }
-
-        return { ...semester, status: nextStatus };
-      })
+      current.map((semester) =>
+        semester.id === editingSemesterId
+          ? {
+              ...semester,
+              careerId: payload.careerId,
+              name: payload.name,
+              code: payload.code,
+              startDate: payload.startDate,
+              endDate: payload.endDate,
+              status: payload.status,
+              updatedAt: timestamp,
+            }
+          : semester
+      )
     );
+
+    if (payload.status === "activo") {
+      setSemesters((current) =>
+        closeOtherActiveSemesters(current, payload.careerId, editingSemesterId)
+      );
+    }
+
+    resetSemesterForm();
+
+    Swal.fire({
+      icon: "success",
+      title: "Semestre actualizado",
+      timer: 1300,
+      showConfirmButton: false,
+    });
+  };
+
+  const setSemesterStatus = (semesterId: string, nextStatus: "activo" | "cerrado") => {
+    const timestamp = nowIso();
+
+    setSemesters((current) => {
+      const target = current.find((semester) => semester.id === semesterId);
+      if (!target) return current;
+
+      const updated = current.map((semester) =>
+        semester.id === semesterId
+          ? { ...semester, status: nextStatus, updatedAt: timestamp }
+          : semester
+      );
+
+      if (nextStatus === "activo") {
+        return closeOtherActiveSemesters(updated, target.careerId, semesterId);
+      }
+
+      return updated;
+    });
+
+    Swal.fire({
+      icon: "success",
+      title: nextStatus === "activo" ? "Semestre activado" : "Semestre cerrado",
+      timer: 1200,
+      showConfirmButton: false,
+    });
   };
 
   return (
@@ -213,15 +512,15 @@ const CareersSemestersManagement: React.FC = () => {
           Carreras y semestres
         </h1>
         <p className="text-sm text-gray-500">
-          Crea carreras, archívalas y controla el estado de los semestres con
-          validaciones visibles en la interfaz.
+          Crea, edita y archiva carreras. Gestiona semestres con validaciones
+          de código único, fechas válidas y un único semestre activo por carrera.
         </p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
           <h2 className="text-xl font-semibold text-black dark:text-white">
-            Crear carrera
+            {editingCareerId ? "Editar carrera" : "Crear carrera"}
           </h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <input
@@ -246,26 +545,45 @@ const CareersSemestersManagement: React.FC = () => {
           </div>
           <button
             type="button"
-            onClick={addCareer}
-            className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white"
+            onClick={editingCareerId ? saveCareerEdition : addCareer}
+            className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            Guardar carrera
+            {editingCareerId ? "Guardar cambios" : "Crear carrera"}
           </button>
+          {editingCareerId && (
+            <>
+              <button
+                type="button"
+                onClick={resetCareerForm}
+                className="ml-2 mt-4 rounded-md border border-stroke px-4 py-2 text-sm font-medium"
+              >
+                Cancelar edición
+              </button>
+              <button
+                type="button"
+                onClick={resetCareerForm}
+                className="ml-2 mt-4 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Nueva carrera
+              </button>
+            </>
+          )}
         </section>
 
         <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
           <h2 className="text-xl font-semibold text-black dark:text-white">
-            Crear semestre
+            {editingSemesterId ? "Editar semestre" : "Crear semestre"}
           </h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <select
               className="rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
               value={semesterForm.careerId}
+              disabled={!availableCareers.length}
               onChange={(e) =>
-                setSemesterForm((current) => ({ ...current, careerId: Number(e.target.value) }))
+                setSemesterForm((current) => ({ ...current, careerId: e.target.value }))
               }
             >
-              {careers.map((career) => (
+              {availableCareers.map((career) => (
                 <option key={career.id} value={career.id}>
                   {career.name}
                 </option>
@@ -276,6 +594,12 @@ const CareersSemestersManagement: React.FC = () => {
               placeholder="Nombre del semestre"
               value={semesterForm.name}
               onChange={(e) => setSemesterForm((current) => ({ ...current, name: e.target.value }))}
+            />
+            <input
+              className="rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
+              placeholder="Código del semestre"
+              value={semesterForm.code}
+              onChange={(e) => setSemesterForm((current) => ({ ...current, code: e.target.value }))}
             />
             <input
               type="date"
@@ -305,11 +629,35 @@ const CareersSemestersManagement: React.FC = () => {
           </div>
           <button
             type="button"
-            onClick={addSemester}
-            className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white"
+            onClick={editingSemesterId ? saveSemesterEdition : addSemester}
+            disabled={!availableCareers.length}
+            className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
           >
-            Guardar semestre
+            {editingSemesterId ? "Guardar cambios" : "Crear semestre"}
           </button>
+          {editingSemesterId && (
+            <>
+              <button
+                type="button"
+                onClick={resetSemesterForm}
+                className="ml-2 mt-4 rounded-md border border-stroke px-4 py-2 text-sm font-medium"
+              >
+                Cancelar edición
+              </button>
+              <button
+                type="button"
+                onClick={resetSemesterForm}
+                className="ml-2 mt-4 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Nuevo semestre
+              </button>
+            </>
+          )}
+          {!availableCareers.length && (
+            <p className="mt-4 text-sm text-red-500">
+              No hay carreras activas disponibles para crear semestres.
+            </p>
+          )}
         </section>
       </div>
 
@@ -324,6 +672,8 @@ const CareersSemestersManagement: React.FC = () => {
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">Matriculados</th>
+                <th className="px-4 py-3">Actualizado</th>
                 <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
@@ -333,11 +683,22 @@ const CareersSemestersManagement: React.FC = () => {
                   <td className="px-4 py-3 text-black dark:text-white">{career.name}</td>
                   <td className="px-4 py-3">{career.code}</td>
                   <td className="px-4 py-3">{career.archived ? "Archivada" : "Activa"}</td>
+                  <td className="px-4 py-3">{career.hasEnrolledStudents ? "Sí" : "No"}</td>
+                  <td className="px-4 py-3">{formatDateTime(career.updatedAt)}</td>
                   <td className="px-4 py-3">
                     <button
                       type="button"
+                      onClick={() => startEditCareer(career)}
+                      disabled={career.archived}
+                      className="mr-2 rounded-md border border-stroke px-3 py-1 text-sm disabled:opacity-40"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => archiveCareer(career.id)}
-                      className="rounded-md border border-stroke px-3 py-1 text-sm"
+                      disabled={career.archived}
+                      className="rounded-md border border-stroke px-3 py-1 text-sm disabled:opacity-40"
                     >
                       Archivar
                     </button>
@@ -359,10 +720,12 @@ const CareersSemestersManagement: React.FC = () => {
               <tr className="bg-gray-2 dark:bg-meta-4">
                 <th className="px-4 py-3">Carrera</th>
                 <th className="px-4 py-3">Semestre</th>
+                <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Inicio</th>
                 <th className="px-4 py-3">Fin</th>
                 <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Acción</th>
+                <th className="px-4 py-3">Actualizado</th>
+                <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -372,16 +735,30 @@ const CareersSemestersManagement: React.FC = () => {
                   <tr key={semester.id} className="border-b border-stroke dark:border-strokedark">
                     <td className="px-4 py-3">{career?.name ?? semester.careerId}</td>
                     <td className="px-4 py-3 text-black dark:text-white">{semester.name}</td>
+                    <td className="px-4 py-3">{semester.code}</td>
                     <td className="px-4 py-3">{semester.startDate}</td>
                     <td className="px-4 py-3">{semester.endDate}</td>
                     <td className="px-4 py-3">{semester.status}</td>
+                    <td className="px-4 py-3">{formatDateTime(semester.updatedAt)}</td>
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => toggleSemesterStatus(semester.id)}
+                        onClick={() => startEditSemester(semester)}
+                        className="mr-2 rounded-md border border-stroke px-3 py-1 text-sm"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSemesterStatus(
+                            semester.id,
+                            semester.status === "activo" ? "cerrado" : "activo"
+                          )
+                        }
                         className="rounded-md border border-stroke px-3 py-1 text-sm"
                       >
-                        Cambiar estado
+                        {semester.status === "activo" ? "Cerrar" : "Activar"}
                       </button>
                     </td>
                   </tr>

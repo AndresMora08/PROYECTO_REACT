@@ -21,6 +21,40 @@ const PlanEstudioPage: React.FC = () => {
   const [terminoBusqueda, setTerminoBusqueda] = useState("");
   const [planSeleccionado, setPlanSeleccionado] = useState<PlanEstudio | null>(null);
   const [carreraSeleccionada, setCarreraSeleccionada] = useState<Carrera | null>(null);
+  const [draftSubjects, setDraftSubjects] = useState<AsignaturaPlan[]>([]);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+
+  const fireAlert = (options: any, text?: string, icon?: any) => {
+    const config =
+      typeof options === "object"
+        ? options
+        : {
+            title: options,
+            text,
+            icon,
+          };
+
+    return Swal.fire({
+      ...config,
+      didOpen: () => {
+        const container = Swal.getContainer();
+        if (container) {
+          container.style.zIndex = "200000";
+        }
+
+        if (typeof config.didOpen === "function") {
+          config.didOpen(Swal.getPopup() as HTMLElement);
+        }
+      },
+    });
+  };
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return "No disponible";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return value;
+    return parsed.toLocaleString();
+  };
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -60,7 +94,7 @@ const PlanEstudioPage: React.FC = () => {
               version_number: plan.year,
               state: plan.is_published ? "vigente" : "borrador",
               subjects: subjects as AsignaturaPlan[],
-              published_at: plan.updated_at,
+              published_at: plan.is_published ? plan.updated_at : plan.created_at,
               created_at: plan.created_at,
               updated_at: plan.updated_at,
             } as VersionPlanEstudio;
@@ -68,10 +102,14 @@ const PlanEstudioPage: React.FC = () => {
         );
 
         setPlanSeleccionado({ ...planConAsignaturas, history: historial });
+        setDraftSubjects(planConAsignaturas.subjects ?? []);
+        setHasPendingChanges(false);
       } else {
         setPlanSeleccionado(null);
+        setDraftSubjects([]);
+        setHasPendingChanges(false);
 
-        const { isConfirmed } = await Swal.fire({
+        const { isConfirmed } = await fireAlert({
           title: "Sin Plan de Estudios",
           text: "Desea inicializar el primer plan de estudios para esta carrera?",
           icon: "question",
@@ -83,29 +121,29 @@ const PlanEstudioPage: React.FC = () => {
           try {
             const nuevoPlan = await planEstudioService.crearPlan(carrera.id, carrera.name, new Date().getFullYear());
             if (nuevoPlan) {
-              await Swal.fire("Listo", "Plan inicial creado correctamente.", "success");
+              await fireAlert("Listo", "Plan inicial creado correctamente.", "success");
               await cargarPlanParaCarrera(carrera);
             }
           } catch (error: any) {
             const msg = error?.message || "No se pudo crear el plan de estudios.";
-            Swal.fire("Error al crear", msg, "error");
+            fireAlert("Error al crear", msg, "error");
           }
         }
       }
     } catch (error) {
       console.error("Fallo al cargar plan:", error);
-      Swal.fire("Error", "No se pudo cargar la informacion del plan.", "error");
+      fireAlert("Error", "No se pudo cargar la informacion del plan.", "error");
     }
 
     setCurrentView("edit");
   };
 
   const manejarEliminarAsignatura = async (subjectId: string) => {
-    if (!planSeleccionado || !carreraSeleccionada) return;
+    if (!planSeleccionado) return;
 
-    const result = await Swal.fire({
+    const result = await fireAlert({
       title: "Estas seguro?",
-      text: "Esta accion desvinculara la asignatura del plan actual.",
+      text: "Esta accion quitara la asignatura del borrador local. El cambio solo se aplica al publicar una nueva version.",
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Si, eliminar",
@@ -113,51 +151,62 @@ const PlanEstudioPage: React.FC = () => {
     });
 
     if (result.isConfirmed) {
-      const exito = await planEstudioService.desvincularAsignatura(planSeleccionado.id, subjectId);
-      if (exito) {
-        Swal.fire("Eliminado", "La asignatura ha sido desvinculada.", "success");
-        await cargarPlanParaCarrera(carreraSeleccionada);
-      } else {
-        Swal.fire("Error", "No se pudo eliminar la asignatura del plan.", "error");
-      }
+      const nextDraft = draftSubjects.filter((subject) => subject.id !== subjectId);
+      setDraftSubjects(nextDraft);
+      setHasPendingChanges(true);
+      fireAlert("Eliminado", "La asignatura fue retirada del borrador local.", "success");
     }
   };
 
   const manejarVincularAsignatura = async (asignatura: Subject) => {
-    if (!planSeleccionado || !carreraSeleccionada) return;
+    if (!planSeleccionado) return;
 
     try {
       const subjectId = asignatura.id || (asignatura as any)._id;
       if (!subjectId) {
-        Swal.fire("Error", "La asignatura seleccionada no tiene un ID valido.", "error");
+        fireAlert("Error", "La asignatura seleccionada no tiene un ID valido.", "error");
         return;
       }
 
-      const res = await planEstudioService.vincularAsignatura(planSeleccionado.id, subjectId);
-
-      if (res) {
-        await cargarPlanParaCarrera(carreraSeleccionada);
-        Swal.fire({
-          title: "Vinculada",
-          text: `La asignatura ${asignatura.name} ha sido anadida al plan.`,
-          icon: "success",
-          timer: 1500,
-          showConfirmButton: false,
-        });
-        closeModal();
+      const alreadyIncluded = draftSubjects.some((subject) => subject.id === subjectId);
+      if (alreadyIncluded) {
+        fireAlert("Sin cambios", "La asignatura ya forma parte del borrador actual.", "info");
+        return;
       }
+
+      setDraftSubjects((current) => [...current, asignatura as AsignaturaPlan]);
+      setHasPendingChanges(true);
+      closeModal();
+      fireAlert({
+        title: "Asignatura agregada",
+        text: `La asignatura ${asignatura.name} fue anadida al borrador local.`,
+        icon: "success",
+        timer: 1500,
+        showConfirmButton: false,
+      });
     } catch (error: any) {
       console.error(error);
-      Swal.fire("Error", error?.message || "No se pudo vincular la asignatura.", "error");
+      fireAlert("Error", error?.message || "No se pudo vincular la asignatura.", "error");
     }
   };
 
   const publicarPlanActual = async () => {
     if (!planSeleccionado || !carreraSeleccionada) return;
 
-    const result = await Swal.fire({
-      title: "Publicar plan",
-      text: "Esto marcara el plan actual como publicado.",
+    if (!hasPendingChanges) {
+      fireAlert("Sin cambios pendientes", "No hay modificaciones en el borrador para publicar.", "info");
+      return;
+    }
+
+    const siguienteVersion =
+      Math.max(
+        planSeleccionado.year,
+        ...(planSeleccionado.history?.map((version) => version.version_number) ?? [])
+      ) + 1;
+
+    const result = await fireAlert({
+      title: "Publicar nueva version",
+      text: `Se creara la version ${siguienteVersion} con ${draftSubjects.length} asignatura(s) y reemplazara la version anterior como vigente.`,
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Si, publicar",
@@ -167,12 +216,28 @@ const PlanEstudioPage: React.FC = () => {
     if (!result.isConfirmed) return;
 
     try {
-      await planEstudioService.publicarPlan(planSeleccionado.id);
-      await Swal.fire("Publicado", "El plan fue marcado como publicado.", "success");
+      const nuevoPlan = await planEstudioService.crearPlan(
+        carreraSeleccionada.id,
+        carreraSeleccionada.name,
+        siguienteVersion
+      );
+
+      if (!nuevoPlan) {
+        throw new Error("No se pudo crear la nueva version del plan.");
+      }
+
+      for (const subject of draftSubjects) {
+        const subjectId = subject.id || (subject as any)._id;
+        if (!subjectId) continue;
+        await planEstudioService.vincularAsignatura(nuevoPlan.id, subjectId);
+      }
+
+      await planEstudioService.publicarPlan(nuevoPlan.id);
+      await fireAlert("Publicado", "La nueva version del plan fue publicada correctamente.", "success");
       await cargarPlanParaCarrera(carreraSeleccionada);
     } catch (error: any) {
       console.error(error);
-      Swal.fire("Error", error?.message || "No se pudo publicar el plan.", "error");
+      fireAlert("Error", error?.message || "No se pudo publicar el plan.", "error");
     }
   };
 
@@ -180,6 +245,8 @@ const PlanEstudioPage: React.FC = () => {
     setCurrentView("list");
     setCarreraSeleccionada(null);
     setPlanSeleccionado(null);
+    setDraftSubjects([]);
+    setHasPendingChanges(false);
   };
 
   const catalogoFiltrado = useMemo(() => {
@@ -193,7 +260,7 @@ const PlanEstudioPage: React.FC = () => {
   const careerColumns: TableColumn<Carrera>[] = [
     { header: "Name", key: "name", render: (c) => <span className="font-semibold text-gray-800 dark:text-white/90">{c.name}</span> },
     { header: "Code", key: "code" },
-    { header: "Updated At", key: "updated_at" },
+    { header: "Updated At", key: "updated_at", render: (c: any) => formatDateTime(c.updated_at ?? c.updatedAt) },
     {
       header: "Actions",
       key: "actions",
@@ -241,7 +308,8 @@ const PlanEstudioPage: React.FC = () => {
     },
     { header: "Subjects", key: "subjects", render: (v) => v.subjects.length },
     { header: "Credits", key: "credits", render: (v) => v.subjects.reduce((acc, s) => acc + (s.credits || 0), 0) },
-    { header: "Updated At", key: "updated_at" },
+    { header: "Creada", key: "created_at", render: (v) => formatDateTime(v.created_at) },
+    { header: "Publicada/Act.", key: "updated_at", render: (v) => formatDateTime(v.published_at) },
   ];
 
   const catalogColumns: TableColumn<Subject>[] = [
@@ -282,15 +350,21 @@ const PlanEstudioPage: React.FC = () => {
   );
 
   const renderEditView = () => {
-    const totalCredits = planSeleccionado?.subjects?.reduce((acc, s) => acc + (s.credits || 0), 0) || 0;
+    const totalCredits = draftSubjects.reduce((acc, s) => acc + (s.credits || 0), 0);
 
     const detalles: DetallesPlan = {
       career: carreraSeleccionada?.name || "",
-      year: planSeleccionado?.year || 0,
-      is_active: Boolean(planSeleccionado?.is_published),
-      total_subjects: planSeleccionado?.subjects?.length || 0,
+      year:
+        hasPendingChanges
+          ? Math.max(
+              planSeleccionado?.year || 0,
+              ...(planSeleccionado?.history?.map((version) => version.version_number) ?? [])
+            ) + 1
+          : planSeleccionado?.year || 0,
+      is_active: Boolean(planSeleccionado?.is_published) && !hasPendingChanges,
+      total_subjects: draftSubjects.length,
       total_credits: totalCredits,
-      last_update: planSeleccionado?.updated_at || "No disponible",
+      last_update: formatDateTime(planSeleccionado?.created_at),
       updated_by: "Backend academico",
     };
 
@@ -298,10 +372,10 @@ const PlanEstudioPage: React.FC = () => {
       { atributo: "Carrera", valor: detalles.career },
       { atributo: "Nombre del plan", valor: planSeleccionado?.name || "N/A" },
       { atributo: "Ano", valor: detalles.year },
-      { atributo: "Estado", valor: detalles.is_active ? "Publicado" : "Borrador" },
+      { atributo: "Estado", valor: hasPendingChanges ? "Borrador local con cambios pendientes" : detalles.is_active ? "Publicado" : "Borrador" },
       { atributo: "Asignaturas", valor: detalles.total_subjects },
       { atributo: "Total creditos", valor: detalles.total_credits },
-      { atributo: "Actualizado", valor: detalles.last_update },
+      { atributo: "Fecha base de la version", valor: detalles.last_update },
     ];
 
     const columnasDetalles: TableColumn<(typeof filasDetalles)[0]>[] = [
@@ -321,9 +395,15 @@ const PlanEstudioPage: React.FC = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-800 dark:text-white/90">{carreraSeleccionada?.name}</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {planSeleccionado?.name} - {planSeleccionado?.year}
-                <span className={`ml-2 px-2 py-0.5 rounded text-xs ${planSeleccionado?.is_published ? "bg-success-500/10 text-success-500" : "bg-warning-500/10 text-warning-500"}`}>
-                  {planSeleccionado?.is_published ? "Publicado" : "Borrador"}
+                {planSeleccionado?.name} - {detalles.year}
+                <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
+                  hasPendingChanges
+                    ? "bg-warning-500/10 text-warning-500"
+                    : planSeleccionado?.is_published
+                      ? "bg-success-500/10 text-success-500"
+                      : "bg-warning-500/10 text-warning-500"
+                }`}>
+                  {hasPendingChanges ? "Borrador local" : planSeleccionado?.is_published ? "Publicado" : "Borrador"}
                 </span>
               </p>
             </div>
@@ -337,9 +417,8 @@ const PlanEstudioPage: React.FC = () => {
               variant="primary"
               size="sm"
               onClick={publicarPlanActual}
-              disabled={Boolean(planSeleccionado?.is_published)}
             >
-              <BoxCubeIcon className="w-4 h-4 mr-2" /> {planSeleccionado?.is_published ? "Plan Publicado" : "Publicar Plan"}
+              <BoxCubeIcon className="w-4 h-4 mr-2" /> Publicar Nueva Version
             </Button>
           </div>
         </div>
@@ -355,9 +434,15 @@ const PlanEstudioPage: React.FC = () => {
 
             <DataTable
               columns={subjectColumns}
-              data={planSeleccionado?.subjects || []}
+              data={draftSubjects}
               emptyMessage="Este plan de estudios no tiene asignaturas vinculadas aun."
             />
+
+            {hasPendingChanges && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                Estas viendo un borrador local. Los cambios no afectan la version vigente hasta publicar una nueva version.
+              </p>
+            )}
 
             <div className="flex justify-end p-4 bg-gray-50 dark:bg-white/[0.02] rounded-xl border border-gray-200 dark:border-gray-800">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300">

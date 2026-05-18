@@ -1,16 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import GenericSearch from "../../components/GenericSearch";
+import { Carrera } from "../../models/Carrera";
+import { planEstudioService } from "../../service/planEstudioService";
 import { userService } from "../../service/userService";
 
 type AdminUser = Record<string, any>;
-
-type CareerOption = {
-  id: string;
-  nombre: string;
-  codigo: string;
-  descripcion: string;
-};
 
 type EnrollmentRecord = {
   id: string;
@@ -24,37 +19,20 @@ type EnrollmentRecord = {
   createdAt: string;
 };
 
-const careerCatalog: CareerOption[] = [
-  {
-    id: "car-1",
-    nombre: "Ingenieria de Sistemas",
-    codigo: "IS-001",
-    descripcion: "Carrera orientada al desarrollo de software y sistemas.",
-  },
-  {
-    id: "car-2",
-    nombre: "Contabilidad",
-    codigo: "CON-001",
-    descripcion: "Carrera orientada a gestion financiera y contable.",
-  },
-  {
-    id: "car-3",
-    nombre: "Administracion",
-    codigo: "ADM-001",
-    descripcion: "Carrera enfocada en gestion y direccion organizacional.",
-  },
-];
-
 const studentInfoFieldLabels: Record<string, string> = {
+  first_name: "Nombre",
+  last_name: "Apellido",
   identification: "Cedula",
   email: "Correo",
-  phone: "Telefono",
   code: "Codigo",
   is_active: "Estado",
+  created_at: "Creado",
+  updated_at: "Actualizado",
 };
 
 const MatriculasManagement: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [careers, setCareers] = useState<Carrera[]>([]);
   const [loading, setLoading] = useState(true);
   const [studentSearch, setStudentSearch] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -65,14 +43,19 @@ const MatriculasManagement: React.FC = () => {
   const [records, setRecords] = useState<EnrollmentRecord[]>([]);
 
   useEffect(() => {
-    const loadUsers = async () => {
+    const loadInitialData = async () => {
       setLoading(true);
-      const response = await userService.getUsers();
-      setUsers(Array.isArray(response) ? response : []);
+      const [usersResponse, careersResponse] = await Promise.all([
+        userService.getUsers(),
+        planEstudioService.getCarreras(),
+      ]);
+
+      setUsers(Array.isArray(usersResponse) ? usersResponse : []);
+      setCareers(Array.isArray(careersResponse) ? careersResponse : []);
       setLoading(false);
     };
 
-    loadUsers();
+    loadInitialData();
   }, []);
 
   const students = useMemo(() => {
@@ -115,10 +98,20 @@ const MatriculasManagement: React.FC = () => {
   const selectedStudentInfoEntries = useMemo(() => {
     if (!selectedStudent) return [];
 
-    const fieldsToShow = ["identification", "email", "phone", "code", "is_active"];
+    const fieldsToShow = [
+      "first_name",
+      "last_name",
+      "identification",
+      "email",
+      "code",
+      "is_active",
+      "created_at",
+      "updated_at",
+    ];
 
     return fieldsToShow.map((key) => {
       const value = selectedStudent[key];
+      const isDateField = key === "created_at" || key === "updated_at";
 
       return {
         key,
@@ -128,6 +121,8 @@ const MatriculasManagement: React.FC = () => {
             ? value
               ? "Activo"
               : "Inactivo"
+            : isDateField && value
+              ? new Date(value).toLocaleString()
             : value === null || value === undefined || value === ""
               ? "-"
               : String(value),
@@ -141,10 +136,10 @@ const MatriculasManagement: React.FC = () => {
   };
 
   const selectedCareerNames = useMemo(() => {
-    return careerCatalog
+    return careers
       .filter((career) => selectedCareerIds.includes(career.id))
-      .map((career) => career.nombre);
-  }, [selectedCareerIds]);
+      .map((career) => career.name);
+  }, [careers, selectedCareerIds]);
 
   const enrollmentSummaryEntries = useMemo(() => {
     return [
@@ -258,6 +253,15 @@ const MatriculasManagement: React.FC = () => {
       return;
     }
 
+    if (careers.length === 0) {
+      Swal.fire({
+        icon: "error",
+        title: "Sin carreras disponibles",
+        text: "No fue posible cargar las carreras desde el backend.",
+      });
+      return;
+    }
+
     const duplicateCareers = selectedCareerIds.filter((careerId) =>
       studentAlreadyHasCareer(String(selectedStudent.id), careerId)
     );
@@ -272,14 +276,14 @@ const MatriculasManagement: React.FC = () => {
     }
 
     const newRecords: EnrollmentRecord[] = selectedCareerIds.map((careerId) => {
-      const career = careerCatalog.find((item) => item.id === careerId);
+      const career = careers.find((item) => item.id === careerId);
       return {
         id: `${selectedStudent.id}-${careerId}-${Date.now()}`,
         studentId: String(selectedStudent.id),
         studentName: `${selectedStudent.first_name ?? ""} ${selectedStudent.last_name ?? ""}`.trim() || "Sin nombre",
         studentEmail: String(selectedStudent.email ?? ""),
         careerId,
-        careerName: career?.nombre ?? careerId,
+        careerName: career?.name ?? careerId,
         period,
         estado_academico,
         createdAt: new Date().toISOString(),
@@ -440,7 +444,7 @@ const MatriculasManagement: React.FC = () => {
                   Seleccionar carrera
                 </label>
                 <div className="space-y-3">
-                  {careerCatalog.map((career) => {
+                  {careers.map((career) => {
                     const alreadyAssigned = studentAlreadyHasCareer(String(selectedStudent.id), career.id);
 
                     return (
@@ -461,10 +465,10 @@ const MatriculasManagement: React.FC = () => {
                         />
                         <div>
                           <p className="font-semibold text-black dark:text-white">
-                            {career.nombre}
+                            {career.name}
                           </p>
                           <p className="text-sm text-gray-500">{career.codigo}</p>
-                          <p className="text-sm text-gray-500">{career.descripcion}</p>
+                          <p className="text-sm text-gray-500">{career.descripcion || "Sin descripcion"}</p>
                           {alreadyAssigned && (
                             <p className="mt-1 text-xs font-medium text-amber-600">
                               Ya tiene matricula activa en esta carrera
@@ -474,6 +478,11 @@ const MatriculasManagement: React.FC = () => {
                       </label>
                     );
                   })}
+                  {careers.length === 0 && (
+                    <p className="rounded-xl border border-dashed border-stroke p-4 text-sm text-gray-500 dark:border-strokedark">
+                      No hay carreras disponibles en el backend para matricular.
+                    </p>
+                  )}
                 </div>
               </div>
 
