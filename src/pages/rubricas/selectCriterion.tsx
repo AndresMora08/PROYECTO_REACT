@@ -91,7 +91,7 @@ const Step2_SelectCriterion: React.FC = () => {
         try {
             await rubricService.publishRubric(rubricId!);
             Swal.fire("¡Publicada!", "La rúbrica está disponible.", "success").then(() =>
-                navigate("/rubrics")
+                navigate("/rubrics/define-scales")
             );
         } catch {
             Swal.fire("Error", "No se pudo publicar la rúbrica.", "error");
