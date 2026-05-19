@@ -53,7 +53,12 @@ const UpdateUser: React.FC = () => {
 
             setUser(fullProfileData);
         } else {
-            Swal.fire("Error", "Usuario no encontrado", "error");
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: "Usuario no encontrado",
+                customClass: { popup: 'rounded-3xl shadow-2xl border-none' }
+            });
             navigate("/users/list");
         }
     };
@@ -76,46 +81,86 @@ const UpdateUser: React.FC = () => {
 
             const updated = await userService.updateUser(id, payload);
             if (updated) {
-                Swal.fire({ icon: "success", title: "Actualizado correctamente" });
+                Swal.fire({ 
+                    icon: "success", 
+                    title: "¡Actualizado!", 
+                    text: "Perfil modificado correctamente.",
+                    customClass: { popup: 'rounded-3xl shadow-2xl border-none' }
+                });
                 navigate("/users/list");
             }
         } catch (error) {
-            Swal.fire("Error", "No se pudo actualizar", "error");
+            Swal.fire({
+                icon: "error",
+                title: "Error",
+                text: "No se pudo actualizar la información.",
+                customClass: { popup: 'rounded-3xl shadow-2xl border-none' }
+            });
         }
     };
 
-    if (!user) return <div className="p-4">Cargando...</div>;
+    if (!user) return (
+        <div className="flex min-h-[500px] items-center justify-center bg-slate-50/50 backdrop-blur-sm rounded-3xl">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent shadow-lg"></div>
+        </div>
+    );
 
     return (
-        <div className="space-y-5">
-            <h2 className="text-2xl font-semibold">Editar Usuario</h2>
-            <GenericForm
-                initialValues={{
-                    email: user.email,
-                    code: user.code,
-                    first_name: user.first_name || "", 
-                    last_name: user.last_name || "",
-                    identification: user.identification || "",
-                    ...(user.role === "TEACHER" ? {
-                        phone: user.phone || "",
-                        specialty: user.specialty || "" 
-                    } : {})
-                }}
-                fields={[
-                    { name: "email", label: "Email", type: "email" },
-                    { name: "code", label: "Código", type: "text" },
-                    { name: "first_name", label: "Nombre", type: "text" },
-                    { name: "last_name", label: "Apellido", type: "text" },
-                    { name: "identification", label: "Identificación", type: "text" },
-                    // 🔹 Solo añade los campos de Teléfono y Especialidad si el usuario cargado es un Docente
-                    ...(user.role === "TEACHER" ? [
-                        { name: "phone", label: "Teléfono", type: "text" },
-                        { name: "specialty", label: "Especialidad", type: "text" } 
-                    ] : [])
-                ]}
-                buttonLabel="Actualizar Usuario"
-                onSubmit={handleSubmit}
-            />
+        <div className="mx-auto max-w-4xl px-4 py-8 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            <style>{`
+                @keyframes slideInUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                .stagger-1 { animation: slideInUp 0.5s ease-out forwards; }
+                .stagger-2 { animation: slideInUp 0.5s ease-out 0.1s forwards; opacity: 0; }
+            `}</style>
+
+            <div className="stagger-1 border-b border-slate-200 pb-6 flex items-center justify-between">
+                <div>
+                    <h2 className="text-3xl font-extrabold tracking-tight text-slate-900">
+                        Editar <span className="text-blue-700">Perfil de Usuario</span>
+                    </h2>
+                    <p className="mt-2 text-slate-500">
+                        Modifique los datos de acceso y perfil de <strong>{user.code}</strong>.
+                    </p>
+                </div>
+                <button 
+                    onClick={() => navigate("/users/list")}
+                    className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg"
+                >
+                    Volver a la lista
+                </button>
+            </div>
+
+            <div className="stagger-2 rounded-2xl border border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/50">
+                <GenericForm
+                    initialValues={{
+                        email: user.email,
+                        code: user.code,
+                        first_name: user.first_name || "", 
+                        last_name: user.last_name || "",
+                        identification: user.identification || "",
+                        ...(user.role === "TEACHER" ? {
+                            phone: user.phone || "",
+                            specialty: user.specialty || "" 
+                        } : {})
+                    }}
+                    fields={[
+                        { name: "email", label: "Correo Electrónico", type: "email" },
+                        { name: "code", label: "Código Único", type: "text" },
+                        { name: "first_name", label: "Nombre(s)", type: "text" },
+                        { name: "last_name", label: "Apellido(s)", type: "text" },
+                        { name: "identification", label: "Identificación (DNI/Cédula)", type: "text" },
+                        ...(user.role === "TEACHER" ? [
+                            { name: "phone", label: "Número de Contacto", type: "text" },
+                            { name: "specialty", label: "Especialidad Académica", type: "text" } 
+                        ] : [])
+                    ]}
+                    buttonLabel="Guardar Cambios"
+                    onSubmit={handleSubmit}
+                />
+            </div>
         </div>
     );
 };

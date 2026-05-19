@@ -1,20 +1,22 @@
-import { Group } from "./Grupo";
+
 
 export enum EstadoSemestre {
 	ACTIVO = "activo",
 	CERRADO = "cerrado"
 }
 
-export interface Semestre {
-	id: string;
-	carreraId: string;
-	name: string;
-	fechaInicio: string;
-	fechaFin: string;
-	estado: EstadoSemestre;
-	createdAt: string;
-	updatedAt: string;
-	grupos:Group[];
+// src/models/Semestre.ts
+
+export interface Semester {
+    id: string;
+    name: string;
+    code: string;
+    career_id?: string;
+    start_date?: string;
+    end_date?: string;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface CrearSemestreInput {
