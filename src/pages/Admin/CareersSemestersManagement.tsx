@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import Swal from "sweetalert2";
+import { careerService } from "../../service/careerService";
 
 type Career = {
   id: string;
@@ -40,57 +41,12 @@ const formatDateTime = (iso: string) => {
   return date.toLocaleString();
 };
 
-const initialCareers: Career[] = [
-  {
-    id: "career-1",
-    name: "Ingeniería de Sistemas",
-    code: "IS-001",
-    description: "Carrera base del catálogo académico.",
-    archived: false,
-    hasEnrolledStudents: false,
-    createdAt: "2026-01-02T09:00:00.000Z",
-    updatedAt: "2026-01-02T09:00:00.000Z",
-  },
-  {
-    id: "career-2",
-    name: "Contaduría Pública",
-    code: "CP-001",
-    description: "Carrera con matrículas activas para validar restricción.",
-    archived: false,
-    hasEnrolledStudents: true,
-    createdAt: "2026-01-03T09:00:00.000Z",
-    updatedAt: "2026-01-03T09:00:00.000Z",
-  },
-];
-
-const initialSemesters: Semester[] = [
-  {
-    id: "semester-1",
-    careerId: "career-1",
-    name: "2026-1",
-    code: "S-2026-1",
-    startDate: "2026-01-15",
-    endDate: "2026-06-20",
-    status: "activo",
-    createdAt: "2026-01-10T09:00:00.000Z",
-    updatedAt: "2026-01-10T09:00:00.000Z",
-  },
-  {
-    id: "semester-2",
-    careerId: "career-2",
-    name: "2026-A",
-    code: "S-2026-A",
-    startDate: "2026-01-20",
-    endDate: "2026-06-25",
-    status: "cerrado",
-    createdAt: "2026-01-10T10:00:00.000Z",
-    updatedAt: "2026-01-10T10:00:00.000Z",
-  },
-];
+const initialSemesters: Semester[] = [];
 
 const CareersSemestersManagement: React.FC = () => {
-  const [careers, setCareers] = useState<Career[]>(initialCareers);
+  const [careers, setCareers] = useState<Career[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>(initialSemesters);
+  const [isLoadingCareers, setIsLoadingCareers] = useState(true);
   const [editingCareerId, setEditingCareerId] = useState<string | null>(null);
   const [editingSemesterId, setEditingSemesterId] = useState<string | null>(null);
   const [careerForm, setCareerForm] = useState({
@@ -99,7 +55,7 @@ const CareersSemestersManagement: React.FC = () => {
     description: "",
   });
   const [semesterForm, setSemesterForm] = useState({
-    careerId: initialCareers[0]?.id ?? "",
+    careerId: "",
     name: "",
     code: "",
     startDate: "",
@@ -111,6 +67,17 @@ const CareersSemestersManagement: React.FC = () => {
     () => careers.filter((career) => !career.archived),
     [careers]
   );
+
+  const loadCareers = async () => {
+    setIsLoadingCareers(true);
+    const data = await careerService.getCareers();
+    setCareers(data);
+    setIsLoadingCareers(false);
+  };
+
+  useEffect(() => {
+    loadCareers();
+  }, []);
 
   useEffect(() => {
     if (!availableCareers.length) return;
@@ -176,34 +143,28 @@ const CareersSemestersManagement: React.FC = () => {
     setEditingCareerId(null);
   };
 
-  const addCareer = () => {
+  const addCareer = async () => {
     const payload = validateCareerForm();
     if (!payload) return;
 
-    const timestamp = nowIso();
+    try {
+      await careerService.createCareer(payload);
+      await loadCareers();
+      resetCareerForm();
 
-    setCareers((current) => [
-      ...current,
-      {
-        id: generateId(),
-        name: payload.name,
-        code: payload.code,
-        description: payload.description,
-        archived: false,
-        hasEnrolledStudents: false,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-    ]);
-
-    resetCareerForm();
-
-    Swal.fire({
-      icon: "success",
-      title: "Carrera creada",
-      timer: 1300,
-      showConfirmButton: false,
-    });
+      Swal.fire({
+        icon: "success",
+        title: "Carrera creada",
+        timer: 1300,
+        showConfirmButton: false,
+      });
+    } catch (error: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Error al crear",
+        text: error?.message || "No se pudo crear la carrera.",
+      });
+    }
   };
 
   const startEditCareer = (career: Career) => {
@@ -224,35 +185,29 @@ const CareersSemestersManagement: React.FC = () => {
     });
   };
 
-  const saveCareerEdition = () => {
+  const saveCareerEdition = async () => {
     if (!editingCareerId) return;
     const payload = validateCareerForm(editingCareerId);
     if (!payload) return;
 
-    const timestamp = nowIso();
+    try {
+      await careerService.updateCareer(editingCareerId, payload);
+      await loadCareers();
+      resetCareerForm();
 
-    setCareers((current) =>
-      current.map((career) =>
-        career.id === editingCareerId
-          ? {
-              ...career,
-              name: payload.name,
-              code: payload.code,
-              description: payload.description,
-              updatedAt: timestamp,
-            }
-          : career
-      )
-    );
-
-    resetCareerForm();
-
-    Swal.fire({
-      icon: "success",
-      title: "Carrera actualizada",
-      timer: 1300,
-      showConfirmButton: false,
-    });
+      Swal.fire({
+        icon: "success",
+        title: "Carrera actualizada",
+        timer: 1300,
+        showConfirmButton: false,
+      });
+    } catch (error: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Error al actualizar",
+        text: error?.message || "No se pudo actualizar la carrera.",
+      });
+    }
   };
 
   const archiveCareer = async (careerId: string) => {
@@ -288,26 +243,27 @@ const CareersSemestersManagement: React.FC = () => {
 
     if (!result.isConfirmed) return;
 
-    const timestamp = nowIso();
+    try {
+      await careerService.archiveCareer(careerId);
+      await loadCareers();
 
-    setCareers((current) =>
-      current.map((item) =>
-        item.id === careerId
-          ? { ...item, archived: true, updatedAt: timestamp }
-          : item
-      )
-    );
+      if (editingCareerId === careerId) {
+        resetCareerForm();
+      }
 
-    if (editingCareerId === careerId) {
-      resetCareerForm();
+      Swal.fire({
+        icon: "success",
+        title: "Carrera archivada",
+        timer: 1300,
+        showConfirmButton: false,
+      });
+    } catch (error: any) {
+      Swal.fire({
+        icon: "error",
+        title: "Error al archivar",
+        text: error?.message || "No se pudo archivar la carrera.",
+      });
     }
-
-    Swal.fire({
-      icon: "success",
-      title: "Carrera archivada",
-      timer: 1300,
-      showConfirmButton: false,
-    });
   };
 
   const validateSemesterForm = () => {
