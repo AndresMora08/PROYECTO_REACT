@@ -1,62 +1,45 @@
 import axios from "axios";
-import { Inscripcion } from "../models/Inscripcion";
 
-const API_URL = "http://127.0.0.1:5000/api/academic/enrollments";
-
-const unwrap = (response: any): any =>
-    response.data?.data ?? response.data;
+const API_URL = "http://127.0.0.1:5000/api/academic";
 
 class EnrollmentService {
-
-    async getEnrollments(): Promise<Inscripcion[]> {
-        const response = await axios.get<any>(API_URL);
-        return unwrap(response);
+  /**
+   * Obtener inscripciones de un grupo (Utilizado en CU-11/12)
+   */
+  async getEnrollmentsByGroup(groupId: string): Promise<any[]> {
+    try {
+      const response = await axios.get(`${API_URL}/groups/${groupId}/enrollments`);
+      return response.data.data ?? response.data ?? [];
+    } catch (error) {
+      console.error("Error al obtener inscripciones del grupo:", error);
+      return [];
     }
+  }
 
-    /** Filtra en cliente por group_id */
-    async getEnrollmentsByGroup(groupId: string): Promise<Inscripcion[]> {
-        const all = await this.getEnrollments();
-        return all.filter((e: Inscripcion) => e.group_id === groupId);
+  /**
+   * Crear matrícula de carrera (HU-06)
+   */
+  async createEnrollment(data: { student_id: string; career_id: string; period: string; estado_academico: string }) {
+    try {
+      const response = await axios.post(`${API_URL}/enrollments`, data);
+      return response.data.data ?? response.data;
+    } catch (error) {
+      console.error("Error al crear matrícula:", error);
+      throw error;
     }
+  }
 
-    async getEnrollmentById(id: string): Promise<Inscripcion> {
-        const response = await axios.get<any>(`${API_URL}/${id}`);
-        return unwrap(response);
-    }
-
-    /** GET /api/academic/enrollments/search?status=ACTIVE */
-    async searchEnrollments(status: string): Promise<Inscripcion[]> {
-        const response = await axios.get<any>(`${API_URL}/search`, {
-            params: { status },
-        });
-        return unwrap(response);
-    }
-
-    async createEnrollment(data: {
-        student_id: string;
-        group_id: string;
-        status: string;
-    }): Promise<Inscripcion> {
-        const response = await axios.post<any>(API_URL, data);
-        return unwrap(response);
-    }
-
-    async updateEnrollment(
-        id: string,
-        data: { student_id: string; group_id: string; status: string }
-    ): Promise<Inscripcion> {
-        const response = await axios.put<any>(`${API_URL}/${id}`, data);
-        return unwrap(response);
-    }
-
-    async deleteEnrollment(id: string): Promise<boolean> {
-        try {
-            await axios.delete(`${API_URL}/${id}`);
-            return true;
-        } catch {
-            return false;
-        }
-    }
+  /**
+   * Actualizar estado académico de una matrícula (HU-06)
+   */
+  async updateEnrollmentStatus(studentId: string, careerId: string, status: string) {
+    const response = await axios.patch(`${API_URL}/enrollments/status`, {
+      student_id: studentId,
+      career_id: careerId,
+      estado_academico: status
+    });
+    return response.data.data ?? response.data;
+  }
 }
 
 export const enrollmentService = new EnrollmentService();
