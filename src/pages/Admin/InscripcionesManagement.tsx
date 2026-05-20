@@ -1,224 +1,261 @@
 import React, { useEffect, useMemo, useState } from "react";
-
 import Swal from "sweetalert2";
-
 import GenericSearch from "../../components/GenericSearch";
+import { Carrera } from "../../models/Carrera";
+import { planEstudioService } from "../../service/planEstudioService";
 import { userService } from "../../service/userService";
 
 type AdminUser = Record<string, any>;
 
-type GroupRecord = {
-  id: string;
-  code: string;
-  subjectCode: string;
-  subjectName: string;
-  careerId: string;
-  careerName: string;
-  semester: string;
-  semesterState: "activo" | "cerrado";
-  teacher: string;
-  capacity: number;
-  enrolled: number;
-  credits: number;
-};
-
 type EnrollmentRecord = {
   id: string;
-  studentId: number;
+  studentId: string;
   studentName: string;
   studentEmail: string;
-  groupId: string;
-  groupCode: string;
-  subjectName: string;
+  careerId: string;
   careerName: string;
-  semester: string;
-  status: "activa" | "cancelada";
+  period: string;
+  estado_academico: "activo" | "retirado" | "suspendido" | "en_riesgo";
   createdAt: string;
 };
 
-const planByCareer: Record<string, string[]> = {
-  "Ingeniería de Sistemas": ["MAT-101", "PRO-101", "BD-201", "RED-201"],
-  Contabilidad: ["MAT-101", "CON-101", "LEG-101"],
-  Administración: ["ADM-101", "ADM-102", "MAT-101"],
+const studentInfoFieldLabels: Record<string, string> = {
+  first_name: "Nombre",
+  last_name: "Apellido",
+  identification: "Cedula",
+  email: "Correo",
+  code: "Codigo",
+  is_active: "Estado",
+  created_at: "Creado",
+  updated_at: "Actualizado",
 };
 
-const groupsCatalog: GroupRecord[] = [
-  {
-    id: "g-1",
-    code: "SIS-1A",
-    subjectCode: "PRO-101",
-    subjectName: "Programación I",
-    careerId: "Ingeniería de Sistemas",
-    careerName: "Ingeniería de Sistemas",
-    semester: "2026-1",
-    semesterState: "activo",
-    teacher: "Dra. Alvarez",
-    capacity: 30,
-    enrolled: 22,
-    credits: 4,
-  },
-  {
-    id: "g-2",
-    code: "SIS-1B",
-    subjectCode: "MAT-101",
-    subjectName: "Matemática I",
-    careerId: "Ingeniería de Sistemas",
-    careerName: "Ingeniería de Sistemas",
-    semester: "2026-1",
-    semesterState: "activo",
-    teacher: "Ing. Torres",
-    capacity: 25,
-    enrolled: 25,
-    credits: 4,
-  },
-  {
-    id: "g-3",
-    code: "CON-1A",
-    subjectCode: "CON-101",
-    subjectName: "Contabilidad Básica",
-    careerId: "Contabilidad",
-    careerName: "Contabilidad",
-    semester: "2026-1",
-    semesterState: "activo",
-    teacher: "Lic. Pérez",
-    capacity: 28,
-    enrolled: 12,
-    credits: 3,
-  },
-  {
-    id: "g-4",
-    code: "ADM-1A",
-    subjectCode: "ADM-101",
-    subjectName: "Administración General",
-    careerId: "Administración",
-    careerName: "Administración",
-    semester: "2026-1",
-    semesterState: "cerrado",
-    teacher: "Lic. Gómez",
-    capacity: 30,
-    enrolled: 18,
-    credits: 3,
-  },
-];
-
-const InscripcionesManagement: React.FC = () => {
+const MatriculasManagement: React.FC = () => {
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [careers, setCareers] = useState<Carrera[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [studentSearch, setStudentSearch] = useState("");
-  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
+  const [selectedCareerIds, setSelectedCareerIds] = useState<string[]>([]);
+  const [period, setPeriod] = useState("2026-P1");
+  const [periodError, setPeriodError] = useState("");
+
+  const [estado_academico, setEstado_academico] = useState<
+    "activo" | "retirado" | "suspendido" | "en_riesgo"
+  >("activo");
+
   const [records, setRecords] = useState<EnrollmentRecord[]>([]);
-  const [creditsExceeded, setCreditsExceeded] = useState(false);
-  const [subjectNotInPlan, setSubjectNotInPlan] = useState<string[]>([]);
-  const CREDIT_LIMIT = 21;
 
   useEffect(() => {
-    const loadUsers = async () => {
+    const loadInitialData = async () => {
       setLoading(true);
-      const response = await userService.getUsers();
-      setUsers(Array.isArray(response) ? response : []);
+
+      const [usersResponse, careersResponse] = await Promise.all([
+        userService.getUsers(),
+        planEstudioService.getCarreras(),
+      ]);
+
+      setUsers(Array.isArray(usersResponse) ? usersResponse : []);
+      setCareers(Array.isArray(careersResponse) ? careersResponse : []);
+
       setLoading(false);
     };
 
-    loadUsers();
+    loadInitialData();
   }, []);
 
   const students = useMemo(() => {
-    return users.filter((user) => String(user.role ?? "").toUpperCase() === "STUDENT");
+    return users.filter(
+      (user) => String(user.role ?? "").toUpperCase() === "STUDENT"
+    );
   }, [users]);
-
-  // Validación E1: Calcular suma de créditos (E1)
-  const calculateTotalCredits = (groupIds: string[]): number => {
-    return groupIds.reduce((sum, groupId) => {
-      const group = groupsCatalog.find((g) => g.id === groupId);
-      return sum + (group?.credits ?? 0);
-    }, 0);
-  };
-
-  // Validación E2: Verificar si hay cupo disponible
-  const hasCapacity = (group: GroupRecord): boolean => {
-    return group.enrolled < group.capacity;
-  };
-
-  // Validación E4: Verificar si la asignatura pertenece al plan de carrera
-  const isSubjectInPlan = (subjectCode: string, careerName: string): boolean => {
-    const allowedSubjects = planByCareer[careerName] ?? [];
-    return allowedSubjects.includes(subjectCode);
-  };
 
   const filteredStudents = useMemo(() => {
     const text = studentSearch.toLowerCase();
+
     return students.filter((student) => {
       if (!text) return true;
-      const name = `${student.first_name ?? ""} ${student.last_name ?? ""}`.toLowerCase();
+
+      const name =
+        `${student.first_name ?? ""} ${student.last_name ?? ""}`.toLowerCase();
+
       const email = String(student.email ?? "").toLowerCase();
       const code = String(student.code ?? "").toLowerCase();
-      const identification = String(student.identification ?? "").toLowerCase();
-      return name.includes(text) || email.includes(text) || code.includes(text) || identification.includes(text);
+
+      const identification = String(
+        student.identification ?? ""
+      ).toLowerCase();
+
+      return (
+        name.includes(text) ||
+        email.includes(text) ||
+        code.includes(text) ||
+        identification.includes(text)
+      );
     });
   }, [studentSearch, students]);
 
   const selectedStudent = useMemo(() => {
-    return students.find((student) => student.id === selectedStudentId) ?? null;
+    return (
+      students.find((student) => student.id === selectedStudentId) ?? null
+    );
   }, [selectedStudentId, students]);
 
-  const activeEnrollment = useMemo(() => {
-    if (!selectedStudent) return null;
+  const selectedStudentProfileImage = useMemo(() => {
+    if (!selectedStudent) return "/images/user/owner.jpg";
 
-    const matricula = selectedStudent.matriculas?.find((item: any) => {
-      const status = String(item.estado ?? item.status ?? "").toLowerCase();
-      return status === "activa" || status === "active" || status === "activo";
-    });
-
-    if (!matricula) {
-      return null;
-    }
-
-    return {
-      careerName:
-        matricula.carrera?.nombre ??
-        matricula.carrera?.name ??
-        matricula.careerName ??
-        matricula.carreraId ??
-        "Sin carrera",
-      careerId:
-        matricula.carrera?.nombre ??
-        matricula.carrera?.name ??
-        matricula.careerName ??
-        matricula.carreraId ??
-        "",
-      period: matricula.periodoIngreso ?? matricula.period ?? "Sin periodo",
-    };
+    return (
+      selectedStudent.photo_url ??
+      selectedStudent.profile_photo ??
+      selectedStudent.avatar ??
+      selectedStudent.image ??
+      "/images/user/owner.jpg"
+    );
   }, [selectedStudent]);
 
-  const eligibleGroups = useMemo(() => {
-    if (!activeEnrollment) return [];
+  const selectedStudentInfoEntries = useMemo(() => {
+    if (!selectedStudent) return [];
 
-    const allowedSubjects = planByCareer[activeEnrollment.careerName] ?? [];
+    const fieldsToShow = [
+      "first_name",
+      "last_name",
+      "identification",
+      "email",
+      "code",
+      "is_active",
+      "created_at",
+      "updated_at",
+    ];
 
-    return groupsCatalog.filter((group) => {
-      const noDuplicate = !records.some(
-        (record) => record.studentId === Number(selectedStudentId) && record.groupId === group.id && record.status === "activa"
-      );
+    return fieldsToShow.map((key) => {
+      const value = selectedStudent[key];
 
-      // Solo mostrar grupos del semestre activo, de la carrera correcta, sin duplicados
-      // E2: No filtrar por cupo aún (lo mostraremos en UI), solo validar en create
-      return (
-        group.semesterState === "activo" &&
-        group.careerName === activeEnrollment.careerName &&
-        noDuplicate
-      );
+      const isDateField =
+        key === "created_at" || key === "updated_at";
+
+      return {
+        key,
+        label: studentInfoFieldLabels[key] ?? key,
+
+        value:
+          key === "is_active"
+            ? value
+              ? "Activo"
+              : "Inactivo"
+            : isDateField && value
+            ? new Date(value).toLocaleString()
+            : value === null ||
+              value === undefined ||
+              value === ""
+            ? "-"
+            : String(value),
+      };
     });
-  }, [activeEnrollment, records, selectedStudentId]);
+  }, [selectedStudent]);
 
-  const selectedGroupSet = useMemo(() => new Set(selectedGroupIds), [selectedGroupIds]);
+  const validatePeriod = (value: string): boolean => {
+    const periodRegex = /^\d{4}-P[1-3]$/;
+    return periodRegex.test(value);
+  };
 
-  const toggleGroup = (groupId: string) => {
-    setSelectedGroupIds((current) =>
-      current.includes(groupId)
-        ? current.filter((item) => item !== groupId)
-        : [...current, groupId]
+  const selectedCareerNames = useMemo(() => {
+    return careers
+      .filter((career) => selectedCareerIds.includes(career.id))
+      .map((career) => career.name);
+  }, [careers, selectedCareerIds]);
+
+  const enrollmentSummaryEntries = useMemo(() => {
+    return [
+      {
+        label: "Estudiante",
+
+        value: selectedStudent
+          ? `${
+              selectedStudent.first_name ?? ""
+            } ${selectedStudent.last_name ?? ""}`.trim() ||
+            "Sin nombre"
+          : "Sin seleccionar",
+      },
+
+      {
+        label: "Correo",
+        value: selectedStudent?.email ?? "-",
+      },
+
+      {
+        label: "Carreras seleccionadas",
+
+        value:
+          selectedCareerNames.length > 0
+            ? selectedCareerNames.join(", ")
+            : "Ninguna",
+      },
+
+      {
+        label: "Cantidad de carreras",
+        value: String(selectedCareerIds.length),
+      },
+
+      {
+        label: "Periodo de ingreso",
+        value: period || "-",
+      },
+
+      {
+        label: "Estado academico inicial",
+        value: estado_academico,
+      },
+
+      {
+        label: "Validez del periodo",
+
+        value: !period
+          ? "Pendiente"
+          : validatePeriod(period)
+          ? "Valido"
+          : "Invalido",
+      },
+    ];
+  }, [
+    estado_academico,
+    period,
+    selectedCareerIds.length,
+    selectedCareerNames,
+    selectedStudent,
+  ]);
+
+  const studentAlreadyHasCareer = (
+    studentId: string,
+    careerId: string
+  ) => {
+    return records.some(
+      (record) =>
+        record.studentId === studentId &&
+        record.careerId === careerId &&
+        record.estado_academico === "activo"
     );
+  };
+
+  const toggleCareer = (careerId: string) => {
+    setSelectedCareerIds((current) =>
+      current.includes(careerId)
+        ? current.filter((item) => item !== careerId)
+        : [...current, careerId]
+    );
+  };
+
+  const handlePeriodChange = (value: string) => {
+    setPeriod(value);
+
+    if (value && !validatePeriod(value)) {
+      setPeriodError(
+        "Formato invalido. Use: YYYY-P# (ej: 2026-P1)"
+      );
+    } else {
+      setPeriodError("");
+    }
   };
 
   const handleCreateEnrollment = () => {
@@ -226,398 +263,142 @@ const InscripcionesManagement: React.FC = () => {
       Swal.fire({
         icon: "warning",
         title: "Selecciona un estudiante",
-        text: "Debes elegir un estudiante para continuar.",
+        text: "Debes elegir un estudiante para matricularlo.",
       });
+
       return;
     }
 
-    // Excepción E3: El estudiante no tiene Matricula activa
-    const matricula = selectedStudent.matriculas?.find((item: any) => {
-      const status = String(item.estado ?? item.status ?? "").toLowerCase();
-      return status === "activa" || status === "active" || status === "activo";
-    });
-
-    if (!matricula) {
+    if (!selectedStudent.is_active) {
       Swal.fire({
         icon: "error",
-        title: "Sin matrícula activa",
-        text: "El estudiante debe tener una matrícula activa en una carrera para inscribirse en grupos. Redirige a Matrículas.",
-      }).then(() => {
-        window.location.href = "/admin/matriculas";
+        title: "Estudiante inactivo",
+        text: "No se puede matricular un estudiante con la cuenta desactivada.",
       });
+
       return;
     }
 
-    if (selectedGroupIds.length === 0) {
-      Swal.fire({
-        icon: "warning",
-        title: "Selecciona grupos",
-        text: "Debes elegir uno o varios grupos del semestre activo.",
-      });
-      return;
-    }
-
-    const selectedCareerName =
-      matricula.carrera?.nombre ??
-      matricula.carrera?.name ??
-      matricula.careerName ??
-      matricula.carreraId ??
-      "";
-
-    // Validar cada grupo seleccionado
-    const groupsToInscribe: GroupRecord[] = [];
-    const groupsWithoutCapacity: GroupRecord[] = [];
-    const groupsNotInPlan: GroupRecord[] = [];
-
-    for (const groupId of selectedGroupIds) {
-      const group = groupsCatalog.find((item) => item.id === groupId);
-      if (!group) continue;
-
-      // Excepción E2: Grupo sin cupo disponible
-      if (!hasCapacity(group)) {
-        groupsWithoutCapacity.push(group);
-      }
-
-      // Excepción E4: La asignatura no pertenece al plan
-      if (!isSubjectInPlan(group.subjectCode, selectedCareerName)) {
-        groupsNotInPlan.push(group);
-      } else {
-        groupsToInscribe.push(group);
-      }
-    }
-
-    // Manejando E2: Si hay grupos sin cupo
-    if (groupsWithoutCapacity.length > 0) {
-      const groupNames = groupsWithoutCapacity.map((g) => g.code).join(", ");
-      Swal.fire({
-        icon: "warning",
-        title: "Sin cupo disponible",
-        text: `Los grupos ${groupNames} no tienen cupo disponible.`,
-      });
-      return;
-    }
-
-    // Excepción E1: Suma de créditos excede el límite
-    const totalCredits = calculateTotalCredits(selectedGroupIds);
-    if (totalCredits > CREDIT_LIMIT) {
+    if (!period || !validatePeriod(period)) {
       Swal.fire({
         icon: "error",
-        title: "Límite de créditos excedido",
-        text: `La suma de créditos (${totalCredits}) excede el límite permitido (${CREDIT_LIMIT}).`,
+        title: "Periodo de ingreso invalido",
+        text: "El formato debe ser YYYY-P# (ej: 2026-P1).",
       });
+
       return;
     }
 
-    // Excepción E4: Advertencia si hay asignaturas fuera del plan
-    if (groupsNotInPlan.length > 0) {
-      const notInPlanNames = groupsNotInPlan.map((g) => g.code).join(", ");
+    if (selectedCareerIds.length === 0) {
       Swal.fire({
         icon: "warning",
-        title: "Asignaturas no en plan",
-        text: `Los grupos ${notInPlanNames} no pertenecen al plan de estudios de la carrera. ¿Deseas continuar de todas formas?`,
-        showCancelButton: true,
-        confirmButtonText: "Sí, continuar",
-        cancelButtonText: "Cancelar",
-      }).then((result) => {
-        if (!result.isConfirmed) {
-          return;
-        }
-
-        // Si el usuario confirma, inscribir todos (incluso los fuera del plan)
-        createInscriptions(selectedGroupIds, selectedStudent, selectedCareerName);
+        title: "Selecciona al menos una carrera",
+        text: "Debes seleccionar minimo una carrera.",
       });
+
       return;
     }
 
-    // Si todo está correcto, crear inscripciones
-    createInscriptions(selectedGroupIds, selectedStudent, selectedCareerName);
-  };
-
-  const createInscriptions = (
-    groupIds: string[],
-    student: AdminUser,
-    careerName: string
-  ) => {
-    const newRecords: EnrollmentRecord[] = groupIds.map((groupId) => {
-      const group = groupsCatalog.find((item) => item.id === groupId)!;
-
-      return {
-        id: `${student.id}-${groupId}-${Date.now()}`,
-        studentId: Number(student.id),
-        studentName: `${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() || "Sin nombre",
-        studentEmail: String(student.email ?? ""),
-        groupId,
-        groupCode: group.code,
-        subjectName: group.subjectName,
-        careerName: group.careerName,
-        semester: group.semester,
-        status: "activa",
-        createdAt: new Date().toISOString(),
-      };
-    });
-
-    setRecords((current) => [...current, ...newRecords]);
-    setSelectedGroupIds([]);
-    setCreditsExceeded(false);
-    setSubjectNotInPlan([]);
-
-    const totalCredits = calculateTotalCredits(groupIds);
     Swal.fire({
       icon: "success",
-      title: "Inscripción creada",
-      text: `El estudiante quedó vinculado a ${groupIds.length} grupo(s) (${totalCredits} créditos).`,
+      title: "Matricula creada",
+      text: "El estudiante fue matriculado correctamente.",
     });
-  };
-
-  const cancelEnrollment = (recordId: string) => {
-    setRecords((current) =>
-      current.map((record) =>
-        record.id === recordId ? { ...record, status: "cancelada" } : record
-      )
-    );
   };
 
   if (loading) {
-    return <div className="p-4 text-sm text-gray-500">Cargando estudiantes...</div>;
+    return (
+      <div className="p-4 text-sm text-gray-500">
+        Cargando estudiantes...
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <p className="text-sm uppercase tracking-[0.25em] text-gray-500">HU-07</p>
+        <p className="text-sm uppercase tracking-[0.25em] text-gray-500">
+          HU-06
+        </p>
+
         <h1 className="text-3xl font-semibold text-black dark:text-white">
-          Inscribir estudiante en grupo
+          Matricular estudiante
         </h1>
+
         <p className="text-sm text-gray-500">
-          Sólo aparecen grupos del semestre activo cuya asignatura pertenece al plan de la carrera del estudiante.
+          Selecciona un estudiante activo y asignale
+          una o varias carreras.
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <h2 className="text-xl font-semibold text-black dark:text-white">
-            Seleccionar estudiante
-          </h2>
-
-          <div className="mt-4">
-            <GenericSearch
-              label="Buscar estudiante"
-              placeholder="Nombre, código, email o identificación"
-              value={studentSearch}
-              onChange={setStudentSearch}
-            />
-          </div>
-
-          <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-stroke dark:border-strokedark">
-            <table className="w-full table-auto text-left">
-              <thead>
-                <tr className="bg-gray-2 dark:bg-meta-4">
-                  <th className="px-4 py-3">Elegir</th>
-                  <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Matrícula activa</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map((student) => {
-                  const matriculaActiva = student.matriculas?.find((item: any) => {
-                    const status = String(item.estado ?? item.status ?? "").toLowerCase();
-                    return status === "activa" || status === "active" || status === "activo";
-                  });
-
-                  return (
-                    <tr key={student.id} className="border-b border-stroke dark:border-strokedark">
-                      <td className="px-4 py-3">
-                        <input
-                          type="radio"
-                          name="student"
-                          checked={selectedStudentId === student.id}
-                          onChange={() => {
-                            setSelectedStudentId(Number(student.id));
-                            setSelectedGroupIds([]);
-                          }}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-black dark:text-white">
-                        {`${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() || "Sin nombre"}
-                      </td>
-                      <td className="px-4 py-3">{student.email ?? "-"}</td>
-                      <td className="px-4 py-3">
-                        {matriculaActiva
-                          ? `${matriculaActiva.carrera?.nombre ?? matriculaActiva.carrera?.name ?? "Carrera"}`
-                          : "No tiene"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <h2 className="text-xl font-semibold text-black dark:text-white">
-            Grupos disponibles
-          </h2>
-
-          {selectedStudent ? (
-            <div className="mt-4 rounded-xl bg-gray-2 p-4 dark:bg-meta-4">
-              <p className="text-sm text-gray-500">Estudiante seleccionado</p>
-              <p className="font-semibold text-black dark:text-white">
-                {`${selectedStudent.first_name ?? ""} ${selectedStudent.last_name ?? ""}`.trim() || "Sin nombre"}
-              </p>
-              <p className="text-sm text-gray-500">{selectedStudent.email}</p>
-              <p className="mt-1 text-sm text-gray-500">
-                Carrera activa: {activeEnrollment?.careerName ?? "Sin matrícula activa"}
-              </p>
-              <p className="mt-1 text-sm text-gray-500">
-                Período: {activeEnrollment?.period ?? "-"}
-              </p>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-gray-500">
-              Selecciona un estudiante para cargar los grupos válidos.
-            </p>
-          )}
-
-          <div className="mt-4 rounded-xl border border-stroke bg-gray-1 p-4 dark:border-strokedark dark:bg-meta-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Créditos seleccionados</p>
-                <p className="text-2xl font-bold text-black dark:text-white">
-                  {calculateTotalCredits(selectedGroupIds)}/{CREDIT_LIMIT}
-                </p>
-              </div>
-              {calculateTotalCredits(selectedGroupIds) > CREDIT_LIMIT && (
-                <div className="rounded-lg bg-red-100 px-3 py-1 text-sm font-semibold text-red-600">
-                  Excedido
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {eligibleGroups.map((group) => {
-              const hasNoCapacity = !hasCapacity(group);
-              const isSubjectOutOfPlan = !isSubjectInPlan(group.subjectCode, activeEnrollment?.careerName ?? "");
-
-              return (
-                <label
-                  key={group.id}
-                  className={`flex items-start gap-3 rounded-xl border p-4 ${
-                    hasNoCapacity
-                      ? "border-red-300 bg-red-50 opacity-60 dark:border-red-500 dark:bg-red-900"
-                      : "border-stroke dark:border-strokedark"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedGroupSet.has(group.id) && !hasNoCapacity}
-                    onChange={() => !hasNoCapacity && toggleGroup(group.id)}
-                    disabled={hasNoCapacity}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <p className="font-semibold text-black dark:text-white">
-                      {group.code} - {group.subjectName}
-                      {isSubjectOutOfPlan && (
-                        <span className="ml-2 inline-block rounded-full bg-yellow-100 px-2 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-700 dark:text-yellow-100">
-                          Fuera del plan
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {group.careerName} | Semestre {group.semester} | {group.teacher}
-                    </p>
-                    <div className="mt-1 flex items-center gap-3">
-                      <p className="text-sm text-gray-500">
-                        Créditos: {group.credits}
-                      </p>
-                      <p className={`text-sm font-semibold ${
-                        hasNoCapacity
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-gray-500"
-                      }`}>
-                        Cupo: {group.enrolled}/{group.capacity}
-                        {hasNoCapacity && (
-                          <span className="ml-1 text-red-600 dark:text-red-400">
-                            (Sin cupo)
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
-
-            {selectedStudent && eligibleGroups.length === 0 && (
-              <p className="rounded-xl border border-dashed border-stroke p-4 text-sm text-gray-500 dark:border-strokedark">
-                No hay grupos activos disponibles para esta carrera o ya fueron inscritos.
-              </p>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={handleCreateEnrollment}
-            className="mt-5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white"
-          >
-            Inscribir estudiante
-          </button>
-        </section>
-      </div>
+      {/* BUSCAR ESTUDIANTE */}
 
       <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
         <h2 className="text-xl font-semibold text-black dark:text-white">
-          Inscripciones creadas
+          Buscar estudiante
         </h2>
-        <div className="mt-4 overflow-x-auto">
+
+        <div className="mt-4">
+          <GenericSearch
+            label="Filtro rapido"
+            placeholder="Nombre, codigo, email o identificacion"
+            value={studentSearch}
+            onChange={setStudentSearch}
+          />
+        </div>
+
+        <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-stroke dark:border-strokedark">
           <table className="w-full table-auto text-left">
             <thead>
               <tr className="bg-gray-2 dark:bg-meta-4">
-                <th className="px-4 py-3">Estudiante</th>
-                <th className="px-4 py-3">Grupo</th>
-                <th className="px-4 py-3">Asignatura</th>
-                <th className="px-4 py-3">Créditos</th>
-                <th className="px-4 py-3">Carrera</th>
+                <th className="px-4 py-3">Seleccionar</th>
+                <th className="px-4 py-3">Nombre</th>
+                <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Acción</th>
               </tr>
             </thead>
+
             <tbody>
-              {records.map((record) => {
-                const group = groupsCatalog.find((g) => g.id === record.groupId);
-                return (
-                  <tr key={record.id} className="border-b border-stroke dark:border-strokedark">
-                    <td className="px-4 py-3 text-black dark:text-white">{record.studentName}</td>
-                    <td className="px-4 py-3">{record.groupCode}</td>
-                    <td className="px-4 py-3">{record.subjectName}</td>
-                    <td className="px-4 py-3">{group?.credits ?? "-"}</td>
-                    <td className="px-4 py-3">{record.careerName}</td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        record.status === "activa"
-                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-100"
-                          : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-100"
-                      }`}>
-                        {record.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {record.status === "activa" && (
-                        <button
-                          type="button"
-                          onClick={() => cancelEnrollment(record.id)}
-                          className="rounded-md border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 dark:border-red-500 dark:text-red-400 dark:hover:bg-red-900"
-                        >
-                          Cancelar
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredStudents.map((student) => (
+                <tr
+                  key={student.id}
+                  className="border-b border-stroke dark:border-strokedark"
+                >
+                  <td className="px-4 py-3">
+                    <input
+                      type="radio"
+                      name="student"
+                      checked={
+                        selectedStudentId === student.id
+                      }
+                      onChange={() => {
+                        setSelectedStudentId(
+                          String(student.id)
+                        );
+
+                        setSelectedCareerIds([]);
+                      }}
+                    />
+                  </td>
+
+                  <td className="px-4 py-3 text-black dark:text-white">
+                    {`${
+                      student.first_name ?? ""
+                    } ${student.last_name ?? ""}`.trim() ||
+                      "Sin nombre"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {student.email ?? "-"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {student.is_active
+                      ? "Activo"
+                      : "Inactivo"}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -626,4 +407,4 @@ const InscripcionesManagement: React.FC = () => {
   );
 };
 
-export default InscripcionesManagement;
+export default MatriculasManagement;
