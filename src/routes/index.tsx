@@ -132,6 +132,8 @@ const CU11_Step3_ReviewSend = lazy(
 // ======================================================
 
 const StudentEvaluations = lazy(() => import("../pages/Estudiante/StudentEvaluations"));
+const StudentGrades = lazy(() => import("../pages/Estudiante/StudentGrades"));
+const StudentGradeDetail = lazy(() => import("../pages/Estudiante/StudentGradeDetail"));
 // ======================================================
 // 🔹 RUTAS
 // ======================================================
@@ -300,6 +302,16 @@ const coreRoutes = [
         path: "/estudiante/evaluaciones",
         title: "Mis Evaluaciones",
         component: StudentEvaluations,
+    },
+    {
+        path: "/estudiante/calificaciones",
+        title: "Mis Calificaciones",
+        component: StudentGrades,
+    },
+    {
+        path: "/estudiante/calificaciones/:gradeId",
+        title: "Detalle de Calificación",
+        component: StudentGradeDetail,
     },
 
     // =========================================
