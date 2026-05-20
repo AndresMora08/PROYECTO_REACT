@@ -4,8 +4,14 @@ import GenericSearch from "../../components/GenericSearch";
 
 import { Group } from "../../models/Grupo";
 import { Semester } from "../../models/Semestre";
-import { Matricula } from "../../models/Matricula";
+import {
+  Registration,
+  AcademicStatus,
+} from "../../models/Matricula";
+
 import { PlanEstudio } from "../../models/PlanEstudio";
+import { Carrera } from "../../models/Carrera";
+import { Student } from "../../models/Estudiante";
 
 import { userService } from "../../service/userService";
 import { groupService } from "../../service/groupService";
@@ -13,290 +19,614 @@ import { semesterService } from "../../service/semesterService";
 import { planEstudioService } from "../../service/planEstudioService";
 import { enrollmentService } from "../../service/enrollmentService";
 
-type AdminUser = Record<string, any>;
+type GroupWithDetails = Group & {
+  Asignatura?: {
+    id: string;
+    name: string;
+    credits: number;
+  };
 
-interface GroupWithDetails extends Group {
-  asignaturaNombre?: string;
-  docenteNombre?: string;
-}
+  Docente?: {
+    first_name: string;
+    last_name: string;
+  };
+};
+
+const studentInfoFieldLabels: Record<string, string> = {
+  first_name: "Nombre",
+  last_name: "Apellido",
+  identification: "Cédula",
+  code: "Código",
+  email: "Correo",
+  created_at: "Creado",
+  updated_at: "Actualizado",
+};
+
+const MAX_CREDITS_PER_SEMESTER = 18;
 
 const InscripcionesGruposManagement: React.FC = () => {
-  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [groups, setGroups] = useState<GroupWithDetails[]>([]);
   const [semesters, setSemesters] = useState<Semester[]>([]);
-  const [planesByCarrera, setPlanesByCarrera] = useState<Record<string, PlanEstudio>>({});
+  const [careers, setCareers] = useState<Carrera[]>([]);
+
+  const [planesByCarrera, setPlanesByCarrera] =
+    useState<Record<string, PlanEstudio>>({});
+
   const [loading, setLoading] = useState(true);
 
-  const [studentSearch, setStudentSearch] = useState("");
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  const [confirming, setConfirming] = useState(false);
+  const [studentSearch, setStudentSearch] =
+    useState("");
 
-  const MAX_CREDITS_PER_SEMESTER = 18;
+  const [selectedStudentId, setSelectedStudentId] =
+    useState<string | null>(null);
+
+  const [selectedGroupIds, setSelectedGroupIds] =
+    useState<string[]>([]);
+
+  const [confirming, setConfirming] =
+    useState(false);
 
   useEffect(() => {
-    const loadInitialData = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
 
         const [
-          usersResponse,
+          studentsResponse,
           groupsResponse,
           semestersResponse,
+          careersResponse,
         ] = await Promise.all([
-          userService.getUsers(),
+          userService.getStudents(),
           groupService.getGroups(),
           semesterService.getSemesters(),
+          planEstudioService.getCarreras(),
         ]);
 
-        setUsers(Array.isArray(usersResponse) ? usersResponse : []);
-        setGroups(Array.isArray(groupsResponse) ? groupsResponse : []);
-        setSemesters(Array.isArray(semestersResponse) ? semestersResponse : []);
+        setStudents(
+          Array.isArray(studentsResponse)
+            ? studentsResponse
+            : []
+        );
 
-        const carreras = await planEstudioService.getCarreras();
-        const planeMap: Record<string, PlanEstudio> = {};
+        setGroups(
+          Array.isArray(groupsResponse)
+            ? groupsResponse
+            : []
+        );
 
-        for (const carrera of carreras) {
-          const planes = await planEstudioService.getPlanesPorCarrera(carrera.id);
-          if (planes.length > 0) {
-            planeMap[carrera.id] = planes[0];
+        setSemesters(
+          Array.isArray(semestersResponse)
+            ? semestersResponse
+            : []
+        );
+
+        setCareers(
+          Array.isArray(careersResponse)
+            ? careersResponse
+            : []
+        );
+
+        const planesMap: Record<
+          string,
+          PlanEstudio
+        > = {};
+
+        for (const carrera of careersResponse) {
+          try {
+            const planes =
+              await planEstudioService.getPlanesPorCarrera(
+                carrera.id
+              );
+
+            if (
+              Array.isArray(planes) &&
+              planes.length > 0
+            ) {
+              planesMap[carrera.id] =
+                planes[0];
+            }
+          } catch (error) {
+            console.error(
+              "Error obteniendo plan:",
+              error
+            );
           }
         }
 
-        setPlanesByCarrera(planeMap);
+        setPlanesByCarrera(planesMap);
       } catch (error) {
-        console.error("Error cargando datos:", error);
+        console.error(error);
+
         Swal.fire({
           icon: "error",
-          title: "Error de conexión",
-          text: "No se pudieron cargar los datos académicos",
+          title: "Error",
+          text: "No fue posible cargar los datos",
         });
       } finally {
         setLoading(false);
       }
     };
 
-    loadInitialData();
+    loadData();
   }, []);
 
-  const students = useMemo(() => {
-    return users.filter(
-      (user) => String(user.role ?? "").toUpperCase() === "STUDENT"
-    );
-  }, [users]);
-
   const filteredStudents = useMemo(() => {
-    const text = studentSearch.toLowerCase();
+    const text =
+      studentSearch.toLowerCase();
+
     return students.filter((student) => {
       if (!text) return true;
-      const name =
-        `${student.first_name ?? ""} ${student.last_name ?? ""}`.toLowerCase();
-      const email = String(student.email ?? "").toLowerCase();
-      const identification = String(student.identification ?? "").toLowerCase();
-      return name.includes(text) || email.includes(text) || identification.includes(text);
+
+      const fullName =
+        `${student.first_name ?? ""} ${
+          student.last_name ?? ""
+        }`.toLowerCase();
+
+      const identification = String(
+        student.identification ?? ""
+      ).toLowerCase();
+
+      const email = String(
+        student.email ?? ""
+      ).toLowerCase();
+
+      const code = String(
+        student.code ?? ""
+      ).toLowerCase();
+
+      return (
+        fullName.includes(text) ||
+        identification.includes(text) ||
+        email.includes(text) ||
+        code.includes(text)
+      );
     });
-  }, [studentSearch, students]);
+  }, [students, studentSearch]);
 
-  const selectedStudent = useMemo(
-    () => students.find((s) => s.id === selectedStudentId) ?? null,
-    [selectedStudentId, students]
-  );
-
-  const activeSemester = useMemo(
-    () => semesters.find((s) => s.is_active) ?? null,
-    [semesters]
-  );
-
-  const activeMatricula = useMemo(() => {
-    if (!selectedStudent?.matriculas) return null;
+  const selectedStudent = useMemo(() => {
     return (
-      selectedStudent.matriculas.find(
-        (m: Matricula) => m.estado === "activa" || m.estado === "ACTIVA"
+      students.find(
+        (s) =>
+          String(s.id) ===
+          String(selectedStudentId)
       ) ?? null
     );
-  }, [selectedStudent]);
+  }, [students, selectedStudentId]);
 
-  const hasActiveMatricula = !!activeMatricula;
+  const selectedStudentProfileImage =
+    useMemo(() => {
+      if (!selectedStudent)
+        return "/images/user/owner.jpg";
 
-  const studentCarreraId = useMemo(
-    () => activeMatricula?.carreraId ?? null,
-    [activeMatricula]
-  );
+      return (
+        (selectedStudent as any)
+          .photo_url ||
+        (selectedStudent as any)
+          .profile_photo ||
+        (selectedStudent as any)
+          .avatar ||
+        "/images/user/owner.jpg"
+      );
+    }, [selectedStudent]);
 
-  const studentPlan = useMemo(
-    () => (studentCarreraId ? planesByCarrera[studentCarreraId] : null),
-    [studentCarreraId, planesByCarrera]
-  );
+  const selectedStudentInfoEntries =
+    useMemo(() => {
+      if (!selectedStudent) return [];
 
-  const allowedSubjectIds = useMemo(
-    () => studentPlan?.subjects?.map((s: any) => s.id ?? s.subject?.id) ?? [],
-    [studentPlan]
-  );
+      const fields = [
+        "first_name",
+        "last_name",
+        "identification",
+        "code",
+        "email",
+        "created_at",
+        "updated_at",
+      ];
 
-  const availableGroups = useMemo(() => {
-    if (!activeSemester) return [];
-    return groups.filter(
-      (g) =>
-        g.semester_id === activeSemester.id &&
-        (allowedSubjectIds.includes(g.subject_id) || allowedSubjectIds.length === 0)
+      return fields.map((key) => {
+        const value = (selectedStudent as any)[
+          key
+        ];
+
+        const isDate =
+          key === "created_at" ||
+          key === "updated_at";
+
+        return {
+          key,
+
+          label:
+            studentInfoFieldLabels[key] ??
+            key,
+
+          value:
+            isDate && value
+              ? new Date(
+                  value
+                ).toLocaleString()
+              : value === null ||
+                value === undefined ||
+                value === ""
+              ? "-"
+              : String(value),
+        };
+      });
+    }, [selectedStudent]);
+
+  const activeSemester = useMemo(() => {
+    return (
+      semesters.find(
+        (semester) =>
+          semester.is_active === true
+      ) ?? null
     );
-  }, [groups, activeSemester, allowedSubjectIds]);
+  }, [semesters]);
 
-  const studentEnrolledGroupIds = useMemo(() => {
-    if (!selectedStudent?.inscripciones) return [];
-    return (selectedStudent.inscripciones || [])
-      .filter((e: any) => e.status === "ACTIVE")
-      .map((e: any) => e.group_id);
-  }, [selectedStudent]);
+  /*
+    =========================================
+    MATRÍCULA ACTIVA
+    =========================================
+  */
 
-  const validSelectedGroups = useMemo(
-    () =>
-      selectedGroupIds
-        .map((id) => availableGroups.find((g) => g.id === id))
-        .filter((g) => !!g) as GroupWithDetails[],
-    [selectedGroupIds, availableGroups]
-  );
+  const activeRegistration =
+    useMemo(() => {
+      if (
+        !selectedStudent?.matriculas
+      )
+        return null;
 
-  const totalSelectedCredits = useMemo(() => {
-    return validSelectedGroups.reduce((sum, group) => {
-      const subject = groups.find((g) => g.id === group.id)?.Asignatura;
-      return sum + (subject?.credits ?? 0);
-    }, 0);
-  }, [validSelectedGroups, groups]);
+      return (
+        selectedStudent.matriculas.find(
+          (
+            registration: Registration
+          ) =>
+            registration.is_active &&
+            registration.academic_status ===
+              AcademicStatus.ACTIVE
+        ) ?? null
+      );
+    }, [selectedStudent]);
+
+  const hasActiveRegistration =
+    !!activeRegistration;
+
+  /*
+    =========================================
+    CARRERA ACTIVA
+    =========================================
+  */
+
+  const activeCareerId =
+    useMemo(() => {
+      if (!activeRegistration)
+        return null;
+
+      return String(
+        activeRegistration.career_id
+      );
+    }, [activeRegistration]);
+
+  /*
+    =========================================
+    PLAN DE ESTUDIO
+    =========================================
+  */
+
+  const activePlan = useMemo(() => {
+    if (!activeCareerId)
+      return null;
+
+    return (
+      planesByCarrera[
+        activeCareerId
+      ] ?? null
+    );
+  }, [
+    activeCareerId,
+    planesByCarrera,
+  ]);
+
+  /*
+    =========================================
+    ASIGNATURAS PERMITIDAS
+    =========================================
+  */
+
+  const allowedSubjectIds =
+    useMemo(() => {
+      if (!activePlan?.subjects)
+        return [];
+
+      return activePlan.subjects.map(
+        (subject: any) =>
+          String(
+            subject.id ??
+              subject.subject?.id
+          )
+      );
+    }, [activePlan]);
+
+  /*
+    =========================================
+    GRUPOS DISPONIBLES
+    =========================================
+  */
+
+  const availableGroups =
+    useMemo(() => {
+      if (!activeSemester)
+        return [];
+
+      return groups.filter((group) => {
+        const sameSemester =
+          String(
+            group.semester_id
+          ) ===
+          String(activeSemester.id);
+
+        const validSubject =
+          allowedSubjectIds.includes(
+            String(group.subject_id)
+          );
+
+        return (
+          sameSemester &&
+          validSubject
+        );
+      });
+    }, [
+      groups,
+      activeSemester,
+      allowedSubjectIds,
+    ]);
+
+  /*
+    =========================================
+    INSCRIPCIONES ACTIVAS
+    =========================================
+  */
+
+  const enrolledGroupIds =
+    useMemo(() => {
+      if (
+        !(selectedStudent as any)
+          ?.inscripciones
+      )
+        return [];
+
+      return (
+        (selectedStudent as any)
+          .inscripciones || []
+      )
+        .filter(
+          (inscripcion: any) =>
+            inscripcion.status ===
+            "ACTIVE"
+        )
+        .map((inscripcion: any) =>
+          String(
+            inscripcion.group_id
+          )
+        );
+    }, [selectedStudent]);
+
+  /*
+    =========================================
+    GRUPOS SELECCIONADOS
+    =========================================
+  */
+
+  const selectedGroups =
+    useMemo(() => {
+      return selectedGroupIds
+        .map((id) =>
+          availableGroups.find(
+            (g) =>
+              String(g.id) ===
+              String(id)
+          )
+        )
+        .filter(
+          Boolean
+        ) as GroupWithDetails[];
+    }, [
+      selectedGroupIds,
+      availableGroups,
+    ]);
+
+  /*
+    =========================================
+    TOTAL CRÉDITOS
+    =========================================
+  */
+
+  const totalCredits =
+    useMemo(() => {
+      return selectedGroups.reduce(
+        (acc, group) => {
+          return (
+            acc +
+            (group.Asignatura
+              ?.credits ?? 0)
+          );
+        },
+        0
+      );
+    }, [selectedGroups]);
+
+  /*
+    =========================================
+    VALIDACIONES
+    =========================================
+  */
 
   const validation = useMemo(() => {
     const errors: string[] = [];
-    const warnings: string[] = [];
 
     if (!selectedStudent) {
-      errors.push("Selecciona un estudiante");
-    } else if (!selectedStudent.is_active) {
-      errors.push("El estudiante no está activo");
-    }
-
-    if (!hasActiveMatricula) {
-      errors.push("El estudiante no tiene una matrícula activa");
-    }
-
-    if (selectedGroupIds.length === 0) {
-      errors.push("Selecciona al menos un grupo");
-    }
-
-    if (totalSelectedCredits > MAX_CREDITS_PER_SEMESTER) {
       errors.push(
-        `Los créditos seleccionados (${totalSelectedCredits}) exceden el límite (${MAX_CREDITS_PER_SEMESTER})`
+        "Debes seleccionar un estudiante"
       );
     }
 
-    const asignaturasNoEnPlan = validSelectedGroups.filter((group) => {
-      const subjectInPlan = allowedSubjectIds.includes(group.subject_id);
-      return !subjectInPlan;
-    });
-
-    if (asignaturasNoEnPlan.length > 0) {
-      warnings.push(
-        `${asignaturasNoEnPlan.length} asignatura(s) NO está(n) en el plan de estudios`
+    if (
+      selectedStudent &&
+      !selectedStudent.is_active
+    ) {
+      errors.push(
+        "El estudiante está inactivo"
       );
     }
 
-    const duplicates = selectedGroupIds.filter((id) =>
-      studentEnrolledGroupIds.includes(id)
-    );
-
-    if (duplicates.length > 0) {
-      errors.push(`El estudiante ya está inscrito en ${duplicates.length} grupo(s)`);
+    if (!hasActiveRegistration) {
+      errors.push(
+        "El estudiante no posee matrícula activa"
+      );
     }
 
-    return { errors, warnings, isValid: errors.length === 0 };
+    if (
+      selectedGroupIds.length === 0
+    ) {
+      errors.push(
+        "Selecciona al menos un grupo"
+      );
+    }
+
+    if (
+      totalCredits >
+      MAX_CREDITS_PER_SEMESTER
+    ) {
+      errors.push(
+        `Los créditos exceden el límite permitido (${MAX_CREDITS_PER_SEMESTER})`
+      );
+    }
+
+    const duplicated =
+      selectedGroupIds.filter((id) =>
+        enrolledGroupIds.includes(
+          String(id)
+        )
+      );
+
+    if (duplicated.length > 0) {
+      errors.push(
+        "El estudiante ya posee inscripciones activas en algunos grupos seleccionados"
+      );
+    }
+
+    return {
+      errors,
+      isValid:
+        errors.length === 0,
+    };
   }, [
     selectedStudent,
-    hasActiveMatricula,
+    hasActiveRegistration,
     selectedGroupIds,
-    totalSelectedCredits,
-    validSelectedGroups,
-    allowedSubjectIds,
-    studentEnrolledGroupIds,
+    totalCredits,
+    enrolledGroupIds,
   ]);
 
-  const handleSelectStudent = (studentId: string) => {
-    setSelectedStudentId(studentId);
-    setSelectedGroupIds([]);
-  };
+  /*
+    =========================================
+    TOGGLE GROUP
+    =========================================
+  */
 
-  const handleToggleGroup = (groupId: string) => {
+  const toggleGroup = (
+    groupId: string
+  ) => {
     setSelectedGroupIds((current) =>
       current.includes(groupId)
-        ? current.filter((id) => id !== groupId)
+        ? current.filter(
+            (id) => id !== groupId
+          )
         : [...current, groupId]
     );
   };
 
-  const handleCreateInscriptions = async () => {
-    if (validation.warnings.length > 0) {
-      const confirmResult = await Swal.fire({
-        icon: "warning",
-        title: "Advertencias",
-        html: `<div class="text-left">${validation.warnings
-          .map((w) => `<p>⚠️ ${w}</p>`)
-          .join("")}</div>`,
-        showCancelButton: true,
-        confirmButtonText: "Continuar",
-        cancelButtonText: "Cancelar",
-      });
+  /*
+    =========================================
+    CREAR INSCRIPCIONES
+    =========================================
+  */
 
-      if (!confirmResult.isConfirmed) return;
-    }
+  const handleCreateEnrollments =
+    async () => {
+      if (!validation.isValid) {
+        Swal.fire({
+          icon: "error",
+          title:
+            "Validación fallida",
 
-    if (!validation.isValid) {
-      Swal.fire({
-        icon: "error",
-        title: "Validación fallida",
-        html: `<div class="text-left">${validation.errors
-          .map((e) => `<p>❌ ${e}</p>`)
-          .join("")}</div>`,
-      });
-      return;
-    }
+          html: validation.errors
+            .map(
+              (error) =>
+                `<p>❌ ${error}</p>`
+            )
+            .join(""),
+        });
 
-    try {
-      setConfirming(true);
+        return;
+      }
 
-      const result = await enrollmentService.enrollStudentInMultipleGroups(
-        selectedStudentId!,
-        selectedGroupIds
-      );
+      try {
+        setConfirming(true);
 
-      if (result.successful.length > 0) {
+        const result =
+          await enrollmentService.enrollStudentInMultipleGroups(
+            String(
+              selectedStudentId
+            ),
+            selectedGroupIds
+          );
+
         Swal.fire({
           icon: "success",
-          title: "Inscripciones creadas",
-          text: `${result.successful.length} grupo(s) inscrito(s) correctamente`,
+          title: "Éxito",
+          text: `${result.successful.length} inscripción(es) creadas correctamente`,
         });
 
-        setSelectedStudentId(null);
         setSelectedGroupIds([]);
-      }
+      } catch (error: any) {
+        console.error(error);
 
-      if (result.failed.length > 0) {
+        const backendMessage =
+          error?.response?.data
+            ?.message ||
+          error.message ||
+          "Error desconocido";
+
         Swal.fire({
-          icon: "warning",
-          title: "Inscripciones parciales",
-          html: `<div class="text-left">
-            Exitosas: ${result.successful.length}<br/>
-            Fallidas: ${result.failed.length}
-          </div>`,
+          icon: "error",
+          title:
+            "No fue posible crear las inscripciones",
+
+          html: `
+            <div class="text-left">
+              ${
+                Array.isArray(
+                  backendMessage
+                )
+                  ? backendMessage
+                      .map(
+                        (
+                          m: string
+                        ) =>
+                          `<p>• ${m}</p>`
+                      )
+                      .join("")
+                  : backendMessage
+              }
+            </div>
+          `,
         });
+      } finally {
+        setConfirming(false);
       }
-    } catch (error) {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: error instanceof Error ? error.message : "Error desconocido",
-      });
-    } finally {
-      setConfirming(false);
-    }
-  };
+    };
 
   if (loading) {
     return (
@@ -312,267 +642,359 @@ const InscripcionesGruposManagement: React.FC = () => {
         <p className="text-sm uppercase tracking-[0.25em] text-gray-500">
           HU-07
         </p>
+
         <h1 className="text-3xl font-semibold text-black dark:text-white">
           Inscribir estudiante en grupo
         </h1>
+
         <p className="text-sm text-gray-500">
-          Selecciona un estudiante con matrícula activa y los grupos para inscribirlo.
+          Selecciona un estudiante con
+          matrícula activa y grupos
+          válidos del plan de estudios.
         </p>
       </div>
 
+      {/* BUSCAR ESTUDIANTE */}
+
       <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
         <h2 className="text-xl font-semibold text-black dark:text-white">
-          Paso 1: Buscar estudiante
+          Buscar estudiante
         </h2>
 
         <div className="mt-4">
           <GenericSearch
             label="Filtro rápido"
-            placeholder="Nombre, cédula o email"
+            placeholder="Nombre, email, código o identificación"
             value={studentSearch}
-            onChange={setStudentSearch}
+            onChange={
+              setStudentSearch
+            }
           />
         </div>
 
         <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-stroke dark:border-strokedark">
-          <table className="w-full table-auto text-left text-sm">
-            <thead className="sticky top-0">
+          <table className="w-full table-auto text-left">
+            <thead>
               <tr className="bg-gray-2 dark:bg-meta-4">
-                <th className="px-4 py-3">Seleccionar</th>
-                <th className="px-4 py-3">Nombre</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3">
+                  Seleccionar
+                </th>
+
+                <th className="px-4 py-3">
+                  Nombre
+                </th>
+
+                <th className="px-4 py-3">
+                  Identificación
+                </th>
               </tr>
             </thead>
+
             <tbody>
-              {filteredStudents.map((student) => (
-                <tr
-                  key={student.id}
-                  className="border-b border-stroke dark:border-strokedark hover:bg-gray-50 dark:hover:bg-meta-4"
-                >
-                  <td className="px-4 py-3">
-                    <input
-                      type="radio"
-                      name="student"
-                      checked={selectedStudentId === student.id}
-                      onChange={() => handleSelectStudent(student.id)}
-                    />
-                  </td>
-                  <td className="px-4 py-3 text-black dark:text-white">
-                    {`${student.first_name ?? ""} ${student.last_name ?? ""}`.trim() ||
-                      "Sin nombre"}
-                  </td>
-                  <td className="px-4 py-3">{student.email ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    {student.is_active ? "✓ Activo" : "✗ Inactivo"}
-                  </td>
-                </tr>
-              ))}
+              {filteredStudents.map(
+                (student) => (
+                  <tr
+                    key={student.id}
+                    className="border-b border-stroke dark:border-strokedark"
+                  >
+                    <td className="px-4 py-3">
+                      <input
+                        type="radio"
+                        name="student"
+                        checked={
+                          String(
+                            selectedStudentId
+                          ) ===
+                          String(
+                            student.id
+                          )
+                        }
+                        onChange={() => {
+                          setSelectedStudentId(
+                            String(
+                              student.id
+                            )
+                          );
+
+                          setSelectedGroupIds(
+                            []
+                          );
+                        }}
+                      />
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {`${student.first_name ?? ""} ${
+                        student.last_name ??
+                        ""
+                      }`.trim()}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {student.identification ??
+                        "-"}
+                    </td>
+                  </tr>
+                )
+              )}
             </tbody>
           </table>
         </div>
       </section>
 
+      {/* INFO ESTUDIANTE */}
+
       {selectedStudent && (
         <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
           <h2 className="text-xl font-semibold text-black dark:text-white">
-            Paso 2: Información del estudiante
+            Información del estudiante
           </h2>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg bg-gray-2 p-4 dark:bg-meta-4">
-              <p className="text-xs uppercase text-gray-500">Nombre</p>
-              <p className="mt-1 font-semibold text-black dark:text-white">
-                {`${selectedStudent.first_name ?? ""} ${selectedStudent.last_name ?? ""}`.trim()}
-              </p>
+          <div className="mt-6 flex flex-col gap-6 lg:flex-row">
+            <div className="flex flex-col items-center">
+              <img
+                src={
+                  selectedStudentProfileImage
+                }
+                alt="student"
+                className="h-32 w-32 rounded-full object-cover border-4 border-primary"
+              />
             </div>
 
-            <div className="rounded-lg bg-gray-2 p-4 dark:bg-meta-4">
-              <p className="text-xs uppercase text-gray-500">Cédula</p>
-              <p className="mt-1 font-semibold text-black dark:text-white">
-                {selectedStudent.identification ?? "-"}
-              </p>
+            <div className="grid flex-1 gap-4 sm:grid-cols-2">
+              {selectedStudentInfoEntries.map(
+                (entry) => (
+                  <div
+                    key={entry.key}
+                    className="rounded-xl bg-gray-2 p-4 dark:bg-meta-4"
+                  >
+                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                      {entry.label}
+                    </p>
+
+                    <p className="mt-2 text-sm font-semibold text-black dark:text-white">
+                      {entry.value}
+                    </p>
+                  </div>
+                )
+              )}
+
+              <div className="rounded-xl bg-gray-2 p-4 dark:bg-meta-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">
+                  Estado matrícula
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-black dark:text-white">
+                  {hasActiveRegistration
+                    ? "Activa"
+                    : "Sin matrícula activa"}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-gray-2 p-4 dark:bg-meta-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">
+                  Carrera activa
+                </p>
+
+                <p className="mt-2 text-sm font-semibold text-black dark:text-white">
+                  {activeRegistration
+                    ?.career?.name ??
+                    "-"}
+                </p>
+              </div>
             </div>
-
-            <div className="rounded-lg bg-gray-2 p-4 dark:bg-meta-4">
-              <p className="text-xs uppercase text-gray-500">Email</p>
-              <p className="mt-1 font-semibold text-black dark:text-white">
-                {selectedStudent.email ?? "-"}
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-gray-2 p-4 dark:bg-meta-4">
-              <p className="text-xs uppercase text-gray-500">Estado matrícula</p>
-              <p className={`mt-1 font-semibold ${
-                hasActiveMatricula ? "text-green-600" : "text-red-600"
-              }`}>
-                {hasActiveMatricula ? "✓ Activa" : "✗ Sin matrícula activa"}
-              </p>
-            </div>
-
-            {activeMatricula && (
-              <>
-                <div className="rounded-lg bg-gray-2 p-4 dark:bg-meta-4">
-                  <p className="text-xs uppercase text-gray-500">Carrera</p>
-                  <p className="mt-1 font-semibold text-black dark:text-white">
-                    {activeMatricula.carrera?.name ?? "-"}
-                  </p>
-                </div>
-
-                <div className="rounded-lg bg-gray-2 p-4 dark:bg-meta-4">
-                  <p className="text-xs uppercase text-gray-500">Estado académico</p>
-                  <p className="mt-1 font-semibold text-black dark:text-white">
-                    {activeMatricula.estado ?? "-"}
-                  </p>
-                </div>
-              </>
-            )}
           </div>
-
-          {!hasActiveMatricula && (
-            <div className="mt-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900 dark:text-red-200">
-              ⚠️ El estudiante no puede ser inscrito sin una matrícula activa.
-            </div>
-          )}
         </section>
       )}
 
-      {selectedStudent && hasActiveMatricula && (
-        <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <h2 className="text-xl font-semibold text-black dark:text-white">
-            Paso 3: Seleccionar grupos
-          </h2>
+      {/* GRUPOS */}
 
-          <p className="mt-2 text-sm text-gray-500">
-            Semestre activo: {activeSemester?.name ?? "No hay semestre activo"}
-          </p>
+      {selectedStudent &&
+        hasActiveRegistration && (
+          <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+            <h2 className="text-xl font-semibold text-black dark:text-white">
+              Seleccionar grupos
+            </h2>
 
-          {availableGroups.length === 0 ? (
-            <div className="mt-4 rounded-lg bg-yellow-50 p-4 text-sm text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200">
-              No hay grupos disponibles.
-            </div>
-          ) : (
-            <>
-              <div className="mt-4 max-h-96 space-y-2 overflow-y-auto">
-                {availableGroups.map((group) => {
-                  const isAlreadyEnrolled = studentEnrolledGroupIds.includes(group.id);
-                  const isSelected = selectedGroupIds.includes(group.id);
-                  const subject = groups.find((g) => g.id === group.id)?.Asignatura;
-                  const credits = subject?.credits ?? 0;
-                  const isNotInPlan = !allowedSubjectIds.includes(group.subject_id);
+            <p className="mt-2 text-sm text-gray-500">
+              Semestre activo:{" "}
+              {activeSemester?.name ??
+                "-"}
+            </p>
+
+            <div className="mt-5 space-y-4">
+              {availableGroups.map(
+                (group) => {
+                  const alreadyEnrolled =
+                    enrolledGroupIds.includes(
+                      String(group.id)
+                    );
+
+                  const selected =
+                    selectedGroupIds.includes(
+                      String(group.id)
+                    );
 
                   return (
-                    <div
+                    <label
                       key={group.id}
-                      className={`flex items-start rounded-lg border p-4 transition ${
-                        isAlreadyEnrolled
-                          ? "border-gray-300 bg-gray-100 opacity-50 dark:border-gray-600 dark:bg-gray-800"
-                          : isSelected
-                          ? "border-primary bg-blue-50 dark:border-primary dark:bg-blue-900"
+                      className={`flex items-start gap-4 rounded-xl border p-4 ${
+                        selected
+                          ? "border-primary bg-blue-50 dark:bg-blue-900"
                           : "border-stroke dark:border-strokedark"
                       }`}
                     >
                       <input
                         type="checkbox"
-                        disabled={isAlreadyEnrolled}
-                        checked={isSelected}
-                        onChange={() => !isAlreadyEnrolled && handleToggleGroup(group.id)}
-                        className="mt-1"
+                        disabled={
+                          alreadyEnrolled
+                        }
+                        checked={
+                          selected
+                        }
+                        onChange={() =>
+                          toggleGroup(
+                            String(
+                              group.id
+                            )
+                          )
+                        }
                       />
 
-                      <div className="ml-4 flex-1">
+                      <div className="flex-1">
                         <p className="font-semibold text-black dark:text-white">
-                          {group.name} ({group.group_code})
+                          {
+                            group.name
+                          }{" "}
+                          (
+                          {
+                            group.group_code
+                          }
+                          )
                         </p>
+
                         <p className="mt-1 text-sm text-gray-500">
-                          Asignatura: {subject?.name ?? "-"} ({credits} créditos)
+                          Asignatura:{" "}
+                          {
+                            group
+                              .Asignatura
+                              ?.name
+                          }{" "}
+                          (
+                          {
+                            group
+                              .Asignatura
+                              ?.credits
+                          }{" "}
+                          créditos)
                         </p>
+
                         <p className="mt-1 text-sm text-gray-500">
-                          Docente: {group.Docente?.first_name ?? "-"}
+                          Docente:{" "}
+                          {
+                            group
+                              .Docente
+                              ?.first_name
+                          }{" "}
+                          {
+                            group
+                              .Docente
+                              ?.last_name
+                          }
                         </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {isAlreadyEnrolled && (
-                            <span className="rounded-full bg-orange-100 px-2 py-1 text-xs text-orange-700 dark:bg-orange-900 dark:text-orange-200">
-                              Ya inscrito
-                            </span>
-                          )}
-                          {isNotInPlan && (
-                            <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200">
-                              ⚠️ No en plan
-                            </span>
-                          )}
-                        </div>
+
+                        {alreadyEnrolled && (
+                          <p className="mt-2 text-xs text-orange-500">
+                            Ya inscrito
+                          </p>
+                        )}
                       </div>
-                    </div>
+                    </label>
                   );
-                })}
-              </div>
-
-              {selectedGroupIds.length > 0 && (
-                <div className="mt-4 rounded-lg bg-blue-50 p-4 dark:bg-blue-900">
-                  <p className="text-sm font-semibold text-blue-700 dark:text-blue-200">
-                    Grupos: {validSelectedGroups.length} | Créditos: {totalSelectedCredits} / {MAX_CREDITS_PER_SEMESTER}
-                  </p>
-                  {totalSelectedCredits > MAX_CREDITS_PER_SEMESTER && (
-                    <p className="mt-1 text-sm font-semibold text-red-600">
-                      ❌ Excede el límite
-                    </p>
-                  )}
-                </div>
+                }
               )}
-            </>
-          )}
-        </section>
-      )}
-
-      {selectedStudent && hasActiveMatricula && (
-        <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
-          <h2 className="text-xl font-semibold text-black dark:text-white">
-            Paso 4: Confirmar
-          </h2>
-
-          {validation.errors.length > 0 && (
-            <div className="mt-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-4 dark:bg-red-900">
-              {validation.errors.map((error, idx) => (
-                <p key={idx} className="text-sm text-red-700 dark:text-red-200">
-                  ❌ {error}
-                </p>
-              ))}
             </div>
-          )}
 
-          {validation.warnings.length > 0 && (
-            <div className="mt-4 rounded-lg border-l-4 border-yellow-500 bg-yellow-50 p-4 dark:bg-yellow-900">
-              {validation.warnings.map((warning, idx) => (
-                <p key={idx} className="text-sm text-yellow-700 dark:text-yellow-200">
-                  ⚠️ {warning}
+            {selectedGroupIds.length >
+              0 && (
+              <div className="mt-4 rounded-xl bg-blue-50 p-4 dark:bg-blue-900">
+                <p className="text-sm font-semibold text-blue-700 dark:text-blue-200">
+                  Créditos:{" "}
+                  {totalCredits} /{" "}
+                  {
+                    MAX_CREDITS_PER_SEMESTER
+                  }
                 </p>
-              ))}
+              </div>
+            )}
+          </section>
+        )}
+
+      {/* CONFIRMAR */}
+
+      {selectedStudent &&
+        hasActiveRegistration && (
+          <section className="rounded-2xl border border-stroke bg-white p-6 shadow-default dark:border-strokedark dark:bg-boxdark">
+            <h2 className="text-xl font-semibold text-black dark:text-white">
+              Confirmar inscripción
+            </h2>
+
+            {validation.errors.length >
+              0 && (
+              <div className="mt-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-4 dark:bg-red-900">
+                {validation.errors.map(
+                  (
+                    error,
+                    index
+                  ) => (
+                    <p
+                      key={index}
+                      className="text-sm text-red-700 dark:text-red-200"
+                    >
+                      ❌ {error}
+                    </p>
+                  )
+                )}
+              </div>
+            )}
+
+            <div className="mt-6 flex gap-4">
+              <button
+                onClick={
+                  handleCreateEnrollments
+                }
+                disabled={
+                  !validation.isValid ||
+                  confirming
+                }
+                className="flex-1 rounded-lg bg-primary px-6 py-3 font-semibold text-white disabled:opacity-50"
+              >
+                {confirming
+                  ? "Inscribiendo..."
+                  : "Crear inscripciones"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setSelectedStudentId(
+                    null
+                  );
+
+                  setSelectedGroupIds(
+                    []
+                  );
+
+                  setStudentSearch(
+                    ""
+                  );
+                }}
+                className="rounded-lg border border-stroke px-6 py-3 font-semibold"
+              >
+                Cancelar
+              </button>
             </div>
-          )}
-
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={handleCreateInscriptions}
-              disabled={!validation.isValid || confirming || selectedGroupIds.length === 0}
-              className="flex-1 rounded-lg bg-primary px-6 py-3 text-center font-semibold text-white transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {confirming ? "Inscribiendo..." : "Crear inscripciones"}
-            </button>
-
-            <button
-              onClick={() => {
-                setSelectedStudentId(null);
-                setSelectedGroupIds([]);
-                setStudentSearch("");
-              }}
-              className="rounded-lg border border-stroke px-6 py-3 font-semibold text-black transition hover:bg-gray-2 dark:border-strokedark dark:text-white dark:hover:bg-meta-4"
-            >
-              Cancelar
-            </button>
-          </div>
-        </section>
-      )}
+          </section>
+        )}
     </div>
   );
 };
