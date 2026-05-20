@@ -8,7 +8,7 @@ import { userService } from "../../service/userService";
 
 // Firebase
 import { auth } from "../../firebase"; 
-import { signInWithPopup, GoogleAuthProvider, GithubAuthProvider, AuthProvider } from "firebase/auth";
+import { signInWithPopup, GoogleAuthProvider, GithubAuthProvider, OAuthProvider, AuthProvider } from "firebase/auth";
 
 const Logotypes = {
     Google: () => (
@@ -130,6 +130,7 @@ export default function SignInForm() {
 
     const loginGoogle = () => handleSocialLogin(new GoogleAuthProvider(), "Google");
     const loginGitHub = () => handleSocialLogin(new GithubAuthProvider(), "GitHub");
+    const loginMicrosoft = () => handleSocialLogin(new OAuthProvider("microsoft.com"), "Microsoft");
 
     return (
         <div className="flex flex-col flex-1">
@@ -148,7 +149,7 @@ export default function SignInForm() {
                         <Logotypes.Google /> Iniciar con Google
                     </button>
                     
-                    <button type="button" className="flex w-full items-center justify-center rounded-lg border border-stroke bg-white p-3 text-sm font-medium hover:bg-gray-50 dark:border-stroke dark:bg-boxdark dark:hover:bg-opacity-90">
+                    <button type="button" onClick={loginMicrosoft} className="flex w-full items-center justify-center rounded-lg border border-stroke bg-white p-3 text-sm font-medium hover:bg-gray-50 dark:border-stroke dark:bg-boxdark dark:hover:bg-opacity-90">
                         <Logotypes.Microsoft /> Iniciar con Microsoft
                     </button>
                     
