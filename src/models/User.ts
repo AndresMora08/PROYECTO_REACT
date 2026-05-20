@@ -13,6 +13,7 @@ export interface User {
     phone?: string | null;
     specialty?: string | null;
     user_id?: string;
+    student_id?: string;
     matriculas?: unknown[];
     inscripciones?: unknown[];
     calificaciones?: unknown[];

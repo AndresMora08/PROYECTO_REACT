@@ -100,7 +100,7 @@ const MatriculasManagement: React.FC = () => {
     return students.find((s) => String(s.id) === String(selectedStudentId)) ?? null;
   }, [selectedStudentId, students]);
 
-  const selectedStudentProfileImage = "/images/user/owner.jpg";
+  const selectedStudentProfileImage = "/images/user/owner.jpg"; 
 
   const selectedStudentInfoEntries = useMemo(() => {
     if (!selectedStudent) return [];

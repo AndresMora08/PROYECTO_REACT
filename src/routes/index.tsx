@@ -23,6 +23,10 @@ const InscripcionesManagement = lazy(
     () => import("../pages/Admin/InscripcionesManagement")
 );
 
+const InscripcionesGruposManagement = lazy(
+    () => import("../pages/Admin/InscripcionesGruposManagement")
+);
+
 const RubricasManagement = lazy(
     () => import("../pages/Admin/RubricasManagement")
 );
@@ -179,13 +183,13 @@ const coreRoutes = [
     },
 
     // =========================================
-    // 🔹 ADMIN - INSCRIPCIONES
+    // 🔹 ADMIN - INSCRIPCIONES (HU-07)
     // =========================================
 
     {
         path: "/admin/inscripciones",
         title: "Inscribir Estudiante en Grupo",
-        component: InscripcionesManagement,
+        component: InscripcionesGruposManagement,
     },
 
     // =========================================
