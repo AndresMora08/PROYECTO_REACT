@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import Swal from "sweetalert2";
 import { evaluacionesService, EvaluacionEstudiante } from "../../service/evaluacionesService";
 import { notasService, NotaFinal } from "../../service/notasService";
 
@@ -7,17 +9,14 @@ interface Props {
 }
 
 const FinalizarNotas: React.FC = () => {
-    const [groupId, setGroupId] = useState<string>(
-        // intentar leer groupId desde la URL (React Router proporciona params en la app principal)
-        window.location.pathname.split("/").includes("groups")
-            ? window.location.pathname.split("/").pop() || ""
-            : ""
-    );
+    const { groupId } = useParams<{ groupId: string }>();
+    const navigate = useNavigate();
 
     const [data, setData] = useState<EvaluacionEstudiante[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [selected, setSelected] = useState<Record<string, boolean>>({});
+    const [notasEditables, setNotasEditables] = useState<Record<string, number>>({});
     const [observaciones, setObservaciones] = useState<Record<string, string>>({});
     const [semestreActivo, setSemestreActivo] = useState<boolean>(true);
     const [incompletasWarning, setIncompletasWarning] = useState<string[]>([]);
@@ -31,18 +30,31 @@ const FinalizarNotas: React.FC = () => {
                 const activo = await evaluacionesService.verificarSemestreActivo(groupId);
                 setSemestreActivo(activo);
 
+                if (!activo) {
+                    await Swal.fire({
+                        icon: "warning",
+                        title: "Semestre inactivo",
+                        text: "El semestre asociado no está activo. Se redirigirá al panel administrativo.",
+                    });
+                    navigate("/admin");
+                    return;
+                }
+
                 const detalles = await evaluacionesService.verificarEvaluacionesIncompletas(groupId);
                 if (detalles && detalles.incompletas) setIncompletasWarning(detalles.detalles || []);
 
                 const califs = await evaluacionesService.getCalificacionesEstudiantes(groupId);
                 setData(califs || []);
                 const initialSelected: Record<string, boolean> = {};
+                const initialNotas: Record<string, number> = {};
                 const initialObs: Record<string, string> = {};
                 (califs || []).forEach((c: any) => {
                     initialSelected[c.inscripcion_id] = true;
+                    initialNotas[c.inscripcion_id] = Number(c.nota_ponderada ?? 0);
                     initialObs[c.inscripcion_id] = c.observaciones || "";
                 });
                 setSelected(initialSelected);
+                setNotasEditables(initialNotas);
                 setObservaciones(initialObs);
             } catch (err: any) {
                 console.error(err);
@@ -59,6 +71,21 @@ const FinalizarNotas: React.FC = () => {
         setSelected((s) => ({ ...s, [inscripcionId]: !s[inscripcionId] }));
     };
 
+    const onNotaChange = (inscripcionId: string, value: string) => {
+        const parsed = Number(value);
+        if (Number.isNaN(parsed)) {
+            setNotasEditables((n) => ({ ...n, [inscripcionId]: 0 }));
+            return;
+        }
+
+        if (parsed < 0 || parsed > 100) {
+            Swal.fire("Error", "La nota final debe estar entre 0 y 100.", "error");
+            return;
+        }
+
+        setNotasEditables((n) => ({ ...n, [inscripcionId]: parsed }));
+    };
+
     const onObservacionChange = (inscripcionId: string, value: string) => {
         setObservaciones((o) => ({ ...o, [inscripcionId]: value }));
     };
@@ -72,8 +99,10 @@ const FinalizarNotas: React.FC = () => {
                 .filter((d) => selected[d.inscripcion_id])
                 .map((d) => ({
                     inscripcion_id: d.inscripcion_id,
-                    nota_final: Math.round((d.nota_ponderada + Number.EPSILON) * 100) / 100,
-                    observaciones: observaciones[d.inscripcion_id] || "",
+                    nota_final: Math.round(((notasEditables[d.inscripcion_id] ?? d.nota_ponderada) + Number.EPSILON) * 100) / 100,
+                    observaciones:
+                        observaciones[d.inscripcion_id] ||
+                        (d.notas_incompletas ? "Registro parcial: existen evaluaciones incompletas." : ""),
                 }));
 
             if (notas.length === 0) {
@@ -143,6 +172,7 @@ const FinalizarNotas: React.FC = () => {
                         <th style={{ borderBottom: "1px solid #ccc", padding: 8 }}>Sel</th>
                         <th style={{ borderBottom: "1px solid #ccc", padding: 8 }}>Estudiante</th>
                         <th style={{ borderBottom: "1px solid #ccc", padding: 8 }}>Nota ponderada</th>
+                        <th style={{ borderBottom: "1px solid #ccc", padding: 8 }}>Nota final</th>
                         <th style={{ borderBottom: "1px solid #ccc", padding: 8 }}>Observaciones</th>
                     </tr>
                 </thead>
@@ -157,7 +187,18 @@ const FinalizarNotas: React.FC = () => {
                                 />
                             </td>
                             <td style={{ padding: 8 }}>{row.estudiante_nombre}</td>
-                            <td style={{ padding: 8 }}>{row.nota_ponderada.toFixed(2)}</td>
+                            <td style={{ padding: 8, fontWeight: 600 }}>{row.nota_ponderada.toFixed(2)}</td>
+                            <td style={{ padding: 8 }}>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    value={notasEditables[row.inscripcion_id] ?? row.nota_ponderada}
+                                    onChange={(e) => onNotaChange(row.inscripcion_id, e.target.value)}
+                                    style={{ width: "100%" }}
+                                />
+                            </td>
                             <td style={{ padding: 8 }}>
                                 <input
                                     type="text"

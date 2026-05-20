@@ -6,7 +6,10 @@ import SearchInput from "../../components/GenericSearch";
 import GenericTable from "../../components/GenericTable";   
 import { rubricService } from "../../service/rubricService";
 import { evaluationService } from "../../service/evaluationService";
-import { groupService } from "../../service/groupService"; 
+import { groupService } from "../../service/groupService";
+import { subjectService } from "../../service/subjectService";
+import { criterionService } from "../../service/criterionService";
+import { Criterio } from "../../models/Criterio";
 
 import { Rubrica } from "../../models/Rubrica";
 import { Evaluacion } from "../../models/Evaluacion";
@@ -62,21 +65,13 @@ export const AssignRubricEvaluation: React.FC = () => {
                 });
             }
 
-            // 3. Obtener los grupos para extraer las asignaturas del docente logueado
-            const groupsData = await groupService.getGroups(); 
-            // 💡 Usamos currentUser.id (o como esté en tu modelo User)
-            const myGroups = groupsData.filter((g: any) => g.teacher_id === currentUser?.id);
-            
-            const uniqueSubjects = new Map();
-            myGroups.forEach((group: any) => {
-                if (group.subject_id && !uniqueSubjects.has(group.subject_id)) {
-                    uniqueSubjects.set(group.subject_id, {
-                        id: group.subject_id,
-                        name: group.subject?.name || "Asignatura Desconocida" 
-                    });
-                }
-            });
-            setTeacherSubjects(Array.from(uniqueSubjects.values()));
+            // 3. Obtener todas las asignaturas disponibles y listarlas
+            const subjectsData = await subjectService.getSubjects();
+            const mappedSubjects = (Array.isArray(subjectsData) ? subjectsData : []).map((s: any) => ({
+                id: String(s.id),
+                name: s.name ?? s.nombre ?? s.code ?? "Asignatura"
+            }));
+            setTeacherSubjects(mappedSubjects);
 
         } catch (error) {
             console.error("Error cargando datos:", error);
@@ -151,7 +146,56 @@ export const AssignRubricEvaluation: React.FC = () => {
                     navigate("/evaluations/list"); 
                 } catch (error) {
                     console.error("Error al asociar:", error);
-                    Swal.fire("Error", "No se pudo realizar la vinculación en el servidor.", "error");
+                    const resp = (error as any)?.response?.data ?? (error as any)?.message ?? String(error);
+                    const serverMsg = typeof resp === 'object' ? JSON.stringify(resp) : String(resp);
+
+                    // Si backend bloquea por calificaciones, ofrecer crear copia (no destructivo)
+                    if (/rubric cannot be changed because grades already exist|rubric cannot be changed|grades already exist|no puede cambiar la rúbrica/i.test(serverMsg)) {
+                        const confirmed = await Swal.fire({
+                            title: 'Rúbrica con calificaciones',
+                            html: `El servidor indica: <pre style="text-align:left;white-space:pre-wrap">${serverMsg}</pre><p>¿Deseas crear una copia de la rúbrica y asociarla en su lugar? Esto preserva las calificaciones actuales.</p>`,
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'Crear copia y asociar',
+                            cancelButtonText: 'Cancelar'
+                        });
+
+                        if (confirmed.isConfirmed) {
+                            try {
+                                const original = await rubricService.getRubricById(selectedRubric.id!);
+                                const criteria = await criterionService.getCriteriaByRubric(selectedRubric.id!);
+                                const ts = new Date().toISOString().replace(/[:.]/g, '-');
+                                const newTitle = `${original?.title ?? selectedRubric.title} (copia ${ts})`;
+                                const created = await rubricService.createRubric({
+                                    title: newTitle,
+                                    description: original?.description ?? original?.descripcion ?? selectedRubric.description ?? '',
+                                    is_public: false,
+                                } as any);
+                                const newId = String(created?.id ?? created?._id ?? '');
+                                if (!newId) throw new Error('La copia no devolvió un ID válido');
+
+                                for (const c of (criteria || []) as Criterio[]) {
+                                    await criterionService.createCriterion({
+                                        rubric_id: newId,
+                                        name: c.name ?? (c as any).nombre,
+                                        description: c.description ?? (c as any).descripcion ?? '',
+                                        weight: Number(c.weight ?? (c as any).peso ?? 0),
+                                    } as any);
+                                }
+
+                                await evaluationService.associateRubric(evaluationId!, newId, selectedSubjectId);
+                                Swal.fire('¡Éxito!', 'Se creó una copia y se asoció correctamente.', 'success');
+                                navigate('/evaluations/list');
+                            } catch (dupError) {
+                                console.error('Error creando copia:', dupError);
+                                const resp2 = (dupError as any)?.response?.data ?? (dupError as any)?.message ?? String(dupError);
+                                const body2 = typeof resp2 === 'object' ? JSON.stringify(resp2, null, 2) : String(resp2);
+                                Swal.fire({ icon: 'error', title: 'No se pudo crear la copia', html: `<pre style="text-align:left;white-space:pre-wrap">${body2}</pre>` });
+                            }
+                        }
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'No se pudo realizar la vinculación en el servidor', html: `<pre style="text-align:left;white-space:pre-wrap">${serverMsg}</pre>` });
+                    }
                 }
             }
         });

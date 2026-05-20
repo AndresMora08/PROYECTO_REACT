@@ -178,6 +178,8 @@ const ListGroups: React.FC = () => {
 
         if (action === "select") {
             navigate(`/groups/manage/${item.id}`);
+        } else if (action === "finalizar") {
+            navigate(`/groups/finalizar/${item.id}`);
         } else if (action === "details" && fullItem) {
             showDetails(fullItem);
         }
@@ -328,6 +330,7 @@ const ListGroups: React.FC = () => {
                         ]}
                         actions={[
                             { name: "select", label: "Gestionar" },
+                            { name: "finalizar", label: "Registrar Nota Final" },
                             { name: "details", label: "Ver Detalles" },
                         ]}
                         onAction={handleAction}

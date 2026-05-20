@@ -28,7 +28,7 @@ const InscripcionesGruposManagement = lazy(
 );
 
 const RubricasManagement = lazy(
-    () => import("../pages/Admin/RubricasManagement")
+    () => import("../pages/Admin/RubricasManagementBackend")
 );
 
 // ======================================================

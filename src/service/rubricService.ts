@@ -3,6 +3,9 @@ import { Rubrica } from "../models/Rubrica"; // Ajusta la ruta a donde guardaste
 
 const API_URL = "http://127.0.0.1:5000/api/evaluation/rubrics";
 
+const unwrap = (response: any): any =>
+    response.data?.data ?? response.data;
+
 class RubricService {
 
     // =====================================================
@@ -41,7 +44,7 @@ class RubricService {
     // =====================================================
     async createRubric(data: Rubrica): Promise<Rubrica> {
         const response = await axios.post<Rubrica>(API_URL, data);
-        return response.data;
+        return unwrap(response);
     }
 
     // =====================================================
@@ -49,7 +52,7 @@ class RubricService {
     // =====================================================
     async updateRubric(id: string, data: Partial<Rubrica>): Promise<Rubrica> {
         const response = await axios.put<Rubrica>(`${API_URL}/${id}`, data);
-        return response.data;
+        return unwrap(response);
     }
 
     // =====================================================
@@ -58,7 +61,7 @@ class RubricService {
     async publishRubric(id: string): Promise<Rubrica> {
         // En tu Postman, esto es un PATCH a /:rubric_id/publish
         const response = await axios.patch<Rubrica>(`${API_URL}/${id}/publish`);
-        return response.data;
+        return unwrap(response);
     }
 
     // =====================================================
