@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Swal from "sweetalert2";
 import GenericSearch from "../../components/GenericSearch";
 import { Carrera } from "../../models/Carrera";
+import { EstadoMatricula } from "../../models/Matricula";
 import { planEstudioService } from "../../service/planEstudioService";
 import { userService } from "../../service/userService";
 import { enrollmentService } from "../../service/enrollmentService";
@@ -16,7 +17,7 @@ type EnrollmentRecord = {
   careerId: string;
   careerName: string;
   period: string;
-  estado_academico: "activo" | "retirado" | "suspendido" | "en_riesgo";
+  estado_academico: EstadoMatricula;
   createdAt: string;
 };
 
@@ -44,16 +45,16 @@ const MatriculasManagement: React.FC = () => {
   const [periodError, setPeriodError] = useState("");
 
   const [estado_academico, setEstado_academico] = useState<
-    "activo" | "retirado" | "suspendido" | "en_riesgo"
-  >("activo");
+    EstadoMatricula
+  >(EstadoMatricula.ACTIVA);
 
   const [records, setRecords] = useState<EnrollmentRecord[]>([]);
 
   const [updateCareerId, setUpdateCareerId] = useState("");
 
   const [updateEstado, setUpdateEstado] = useState<
-    "activo" | "retirado" | "suspendido" | "en_riesgo"
-  >("activo");
+    EstadoMatricula
+  >(EstadoMatricula.ACTIVA);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -167,6 +168,7 @@ const MatriculasManagement: React.FC = () => {
 
   const selectedCareerNames = useMemo(() => {
     return careers
+      .filter((career) => !career.archivada)
       .filter((career) => selectedCareerIds.includes(career.id))
       .map((career) => career.name);
   }, [careers, selectedCareerIds]);
@@ -231,14 +233,46 @@ const MatriculasManagement: React.FC = () => {
   ]);
 
   const studentAlreadyHasCareer = (
-    studentId: string,
+    student: AdminUser | null,
     careerId: string
   ) => {
-    return records.some(
-      (record) =>
-        record.studentId === studentId &&
-        record.careerId === careerId &&
-        record.estado_academico === "activo"
+    const normalizedCareerId = String(careerId ?? "").trim();
+
+    const hasBackendEnrollment = Array.isArray(student?.matriculas)
+      ? student.matriculas.some((matricula: any) => {
+          const matriculaCareerId = String(
+            matricula?.career_id ??
+              matricula?.careerId ??
+              matricula?.carreraId ??
+              matricula?.carrera?.id ??
+              matricula?.carrera?.career_id ??
+              ""
+          ).trim();
+
+          const matriculaEstado = String(
+            matricula?.estado ??
+              matricula?.estado_academico ??
+              matricula?.status ??
+              ""
+          )
+            .trim()
+            .toLowerCase();
+
+          return (
+            matriculaCareerId === normalizedCareerId &&
+            (matriculaEstado === "activa" || matriculaEstado === "activo")
+          );
+        })
+      : false;
+
+    return (
+      hasBackendEnrollment ||
+      records.some(
+        (record) =>
+          record.studentId === String(student?.student_id ?? student?.id ?? "") &&
+          record.careerId === normalizedCareerId &&
+          record.estado_academico === "activo"
+      )
     );
   };
 
@@ -305,10 +339,14 @@ const MatriculasManagement: React.FC = () => {
 
     try {
       const createdRecords: EnrollmentRecord[] = [];
+      const studentId = String(
+        selectedStudent.student_id ?? selectedStudent.id ?? ""
+      );
 
       for (const careerId of selectedCareerIds) {
+        const career = careers.find((item) => item.id === careerId);
         const alreadyAssigned = studentAlreadyHasCareer(
-          String(selectedStudent.id),
+          selectedStudent,
           careerId
         );
 
@@ -316,26 +354,22 @@ const MatriculasManagement: React.FC = () => {
           Swal.fire({
             icon: "error",
             title: "Error",
-            text: "No se puede matricular",
+            text: `El estudiante ya tiene matrícula activa para ${career?.name ?? "esa carrera"}.`,
           });
 
           return;
         }
 
         await enrollmentService.createEnrollment({
-          student_id: String(selectedStudent.id),
+          student_id: studentId,
           career_id: careerId,
           period,
           estado_academico,
         });
 
-        const career = careers.find(
-          (item) => item.id === careerId
-        );
-
         createdRecords.push({
-          id: `${selectedStudent.id}-${careerId}-${Date.now()}`,
-          studentId: String(selectedStudent.id),
+          id: `${studentId}-${careerId}-${Date.now()}`,
+          studentId,
 
           studentName:
             `${selectedStudent.first_name ?? ""} ${
@@ -362,7 +396,7 @@ const MatriculasManagement: React.FC = () => {
       ]);
 
       setSelectedCareerIds([]);
-      setEstado_academico("activo");
+      setEstado_academico(EstadoMatricula.ACTIVA);
       setPeriod("2026-P1");
       setPeriodError("");
 
@@ -374,10 +408,21 @@ const MatriculasManagement: React.FC = () => {
     } catch (error) {
       console.error(error);
 
+      const backendMessage =
+        error && typeof error === "object" && "response" in error
+          ? String(
+              (error as { response?: { data?: any } }).response?.data?.message ??
+                (error as { response?: { data?: any } }).response?.data?.error ??
+                ""
+            )
+          : "";
+
       Swal.fire({
         icon: "error",
         title: "Error",
-        text: "No se puede matricular",
+        text: backendMessage
+          ? `No se puede matricular: ${backendMessage}`
+          : "No se puede matricular",
       });
     }
   };
@@ -395,14 +440,14 @@ const MatriculasManagement: React.FC = () => {
 
     try {
       await enrollmentService.updateEnrollmentStatus(
-        String(selectedStudent.id),
+        String(selectedStudent.student_id ?? selectedStudent.id ?? ""),
         updateCareerId,
         updateEstado
       );
 
       setRecords((current) =>
         current.map((record) =>
-          record.studentId === String(selectedStudent.id) &&
+          record.studentId === String(selectedStudent.student_id ?? selectedStudent.id ?? "") &&
           record.careerId === updateCareerId
             ? {
                 ...record,
@@ -587,9 +632,9 @@ const MatriculasManagement: React.FC = () => {
                 </label>
 
                 <div className="space-y-3">
-                  {careers.map((career) => {
+                  {careers.filter((career) => !career.archivada).map((career) => {
                     const alreadyAssigned = studentAlreadyHasCareer(
-                      String(selectedStudent.id),
+                      selectedStudent,
                       career.id
                     );
 
@@ -663,16 +708,13 @@ const MatriculasManagement: React.FC = () => {
                 <select
                   value={estado_academico}
                   onChange={(e) =>
-                    setEstado_academico(
-                      e.target.value as typeof estado_academico
-                    )
+                    setEstado_academico(e.target.value as EstadoMatricula)
                   }
                   className="w-full rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
                 >
-                  <option value="activo">Activo</option>
-                  <option value="retirado">Retirado</option>
-                  <option value="suspendido">Suspendido</option>
-                  <option value="en_riesgo">En Riesgo</option>
+                  <option value={EstadoMatricula.ACTIVA}>Activa</option>
+                  <option value={EstadoMatricula.RETIRADA}>Retirada</option>
+                  <option value={EstadoMatricula.INACTIVA}>Inactiva</option>
                 </select>
               </div>
             </div>
@@ -770,16 +812,13 @@ const MatriculasManagement: React.FC = () => {
             <select
               value={updateEstado}
               onChange={(e) =>
-                setUpdateEstado(
-                  e.target.value as typeof updateEstado
-                )
+                setUpdateEstado(e.target.value as EstadoMatricula)
               }
               className="w-full rounded-md border border-stroke bg-transparent px-4 py-3 outline-none dark:border-strokedark dark:bg-form-input dark:text-white"
             >
-              <option value="activo">Activo</option>
-              <option value="retirado">Retirado</option>
-              <option value="suspendido">Suspendido</option>
-              <option value="en_riesgo">En Riesgo</option>
+              <option value={EstadoMatricula.ACTIVA}>Activa</option>
+              <option value={EstadoMatricula.RETIRADA}>Retirada</option>
+              <option value={EstadoMatricula.INACTIVA}>Inactiva</option>
             </select>
           </div>
         </div>

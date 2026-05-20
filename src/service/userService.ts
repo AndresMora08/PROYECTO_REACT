@@ -50,6 +50,7 @@ class UserService {
                     if (studentProfile) {
                         return {
                             ...user,
+                            student_id: studentProfile.id,
                             first_name: studentProfile.first_name,
                             last_name: studentProfile.last_name,
                             identification: studentProfile.identification,
