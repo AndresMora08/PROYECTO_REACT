@@ -81,6 +81,22 @@ class SecurityService extends EventTarget {
     isAuthenticated(): boolean {
         return !!this.storage.getItem(this.keyToken);
     }
+
+    async registerAdmin(data: {
+    email: string;
+    password: string;
+    code: string;
+    first_name: string;
+    last_name: string;
+    identification: string;
+}) {
+    const response = await axios.post(
+        `${this.API_URL}/register-admin`,
+        data
+    );
+
+    return response.data.data ?? response.data;
+}
 }
 
 export default new SecurityService();
