@@ -67,8 +67,10 @@ const ScaleForm: React.FC<ScaleFormProps> = ({
     const handleSubmit = () => {
         setError("");
         if (!name.trim()) { setError("El nombre es obligatorio."); return; }
-        const num = parseFloat(value);
+        const num = Number(value);
         if (isNaN(num)) { setError("El valor debe ser un número."); return; }
+        if (!Number.isInteger(num)) { setError("El valor debe ser un número entero."); return; }
+        if (num < 2 || num > 5) { setError("El valor debe estar entre 2 y 5."); return; }
 
         // E1: valor duplicado dentro del mismo criterio
         const otherValues = isEditing
@@ -124,8 +126,11 @@ const ScaleForm: React.FC<ScaleFormProps> = ({
                     </label>
                     <input
                         type="number"
+                        min={2}
+                        max={5}
+                        step={1}
                         className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                        placeholder="Ej: 100"
+                        placeholder="Ej: 3"
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
                     />
@@ -201,6 +206,7 @@ const Step3_DefineScales: React.FC = () => {
 
     // ── Valores actuales (para validar unicidad) ───────────────
     const currentValues = scales.map((s) => s.value);
+    const invalidScales = scales.filter((s) => s.value < 2 || s.value > 5);
 
     // ── Agregar nivel desde formulario ─────────────────────────
     const handleFormSave = async (data: {
@@ -255,13 +261,19 @@ const Step3_DefineScales: React.FC = () => {
         }
 
         const others = allScales.filter((s) => s.criterion_id !== criterionId);
+        // Filtrar solo niveles con valores válidos (2..5)
+        const validOthers = others.filter((s) => s.value >= 2 && s.value <= 5);
+        if (validOthers.length === 0) {
+            Swal.fire("Sin niveles válidos", "No hay niveles en otros criterios con valores entre 2 y 5 para reutilizar.", "info");
+            return;
+        }
         if (others.length === 0) {
             Swal.fire("Sin escalas", "No hay escalas en otros criterios para reutilizar.", "info");
             return;
         }
 
         // Agrupar por criterion_id para mostrar en el select
-        const grouped = others.reduce<Record<string, Escala[]>>((acc, s) => {
+        const grouped = validOthers.reduce<Record<string, Escala[]>>((acc, s) => {
             if (!acc[s.criterion_id]) acc[s.criterion_id] = [];
             acc[s.criterion_id].push(s);
             return acc;
@@ -439,6 +451,13 @@ const Step3_DefineScales: React.FC = () => {
                         {scales.length} nivel(es) definidos — {hasMin2 ? "criterio completo" : `faltan ${2 - scales.length} para el mínimo requerido`}
                         {scales.length >= 5 && " · Máximo de 5 niveles alcanzado"}
                     </span>
+                </div>
+            )}
+
+            {/* Advertencia: niveles existentes fuera de rango */}
+            {!isLoading && invalidScales.length > 0 && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-100 rounded px-3 py-2">
+                    ⚠️ Se detectaron {invalidScales.length} nivel(es) con valores fuera del rango permitido (2..5). Por favor corríjalos.
                 </div>
             )}
 
