@@ -2,7 +2,7 @@
 
 
 
-import { Matricula } from "./Matricula";
+import {Registration} from "./Matricula";
 
 import { Inscripcion } from "./Inscripcion";
 
@@ -21,7 +21,7 @@ export interface Student {
 
 
 
-    matriculas: Matricula[];
+    matriculas: Registration[];
 
     inscripciones: Inscripcion[];
 
