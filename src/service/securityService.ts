@@ -66,10 +66,17 @@ class SecurityService extends EventTarget {
         return dbUser; 
     }
 
-    logout() {
-        this.storage.clear();
-        store.dispatch(setUser(null));
-    }
+ logout() {
+    // 1. eliminar solo lo que pertenece a auth
+    this.storage.removeItem(this.keyToken);
+    this.storage.removeItem(this.userKey);
+
+    // 2. limpiar memoria interna del service
+    this.user = null;
+
+    // 3. limpiar redux
+    store.dispatch(setUser(null));
+}
 
     isAuthenticated(): boolean {
         return !!this.storage.getItem(this.keyToken);
