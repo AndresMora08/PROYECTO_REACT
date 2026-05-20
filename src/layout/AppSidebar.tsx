@@ -118,7 +118,7 @@ const docenteNavItems: NavItem[] = [
 const estudianteNavItems: NavItem[] = [
   {
     name: "Consultar Rúbricas",
-    path: "/estudiante/rubricas",
+    path: "/estudiante/evaluaciones",
     icon: <UserCircleIcon />,
   },
 

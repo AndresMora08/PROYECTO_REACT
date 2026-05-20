@@ -126,6 +126,12 @@ const CU11_Step2_EvaluateCriteria = lazy(
 const CU11_Step3_ReviewSend = lazy(
     () => import("../pages/rubricas/reviewSend")
 );
+
+// ======================================================
+// 🔹 ESTUDIANTE
+// ======================================================
+
+const StudentEvaluations = lazy(() => import("../pages/Estudiante/StudentEvaluations"));
 // ======================================================
 // 🔹 RUTAS
 // ======================================================
@@ -284,6 +290,16 @@ const coreRoutes = [
         path: "/evaluations/:evaluationId/rubrica",
         title: "Consultar Rúbrica",
         component: ConsultarRubrica,
+    },
+
+    // =========================================
+    // 🔹 ESTUDIANTE - EVALUACIONES
+    // =========================================
+
+    {
+        path: "/estudiante/evaluaciones",
+        title: "Mis Evaluaciones",
+        component: StudentEvaluations,
     },
 
     // =========================================
