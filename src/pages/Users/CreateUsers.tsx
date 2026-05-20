@@ -14,15 +14,72 @@ const CreateUser: React.FC = () => {
     const navigate = useNavigate();
     const [step, setStep] = useState<number>(1);
     const [baseUserData, setBaseUserData] = useState<Record<string, any>>({});
+    const [isEvaluatingBase, setIsEvaluatingBase] = useState(false);
 
-    const handleBaseSubmit = (formData: Record<string, any>) => {
-        setBaseUserData({
-            email: formData.email,
-            password: formData.password,
-            code: formData.code,
-            role: formData.role
-        });
-        setStep(2);
+    const handleBackToBase = () => {
+        setStep(1);
+    };
+
+    const validateBaseStep = (formData: Record<string, any>) => {
+        const email = String(formData.email ?? "").trim();
+        const password = String(formData.password ?? "").trim();
+        const code = String(formData.code ?? "").trim();
+        const role = String(formData.role ?? "").trim();
+
+        if (!email || !password || !code || !role) {
+            Swal.fire({
+                icon: "warning",
+                title: "Completa la zona 1",
+                text: "Antes de pasar a la segunda zona debes completar correo, contraseña, código y rol.",
+                customClass: { popup: 'rounded-3xl shadow-2xl border-none' }
+            });
+            return null;
+        }
+
+        return { email, password, code, role };
+    };
+
+    const handleBaseSubmit = async (formData: Record<string, any>) => {
+        const validatedBaseData = validateBaseStep(formData);
+
+        if (!validatedBaseData) {
+            return;
+        }
+
+        setIsEvaluatingBase(true);
+
+        try {
+            const users = await userService.getUsers();
+            const normalizedEmail = validatedBaseData.email.toLowerCase();
+            const normalizedCode = validatedBaseData.code.toLowerCase();
+
+            const duplicateUser = users.find((user) => {
+                const userEmail = String(user.email ?? "").toLowerCase();
+                const userCode = String(user.code ?? "").toLowerCase();
+
+                return userEmail === normalizedEmail || userCode === normalizedCode;
+            });
+
+            if (duplicateUser) {
+                Swal.fire({
+                    icon: "warning",
+                    title: "Datos ya registrados",
+                    text: "El correo o el código ya existen. Corrige la zona 1 antes de pasar a la segunda.",
+                    customClass: { popup: 'rounded-3xl shadow-2xl border-none' }
+                });
+                return;
+            }
+
+            setBaseUserData({
+                email: validatedBaseData.email,
+                password: validatedBaseData.password,
+                code: validatedBaseData.code,
+                role: validatedBaseData.role
+            });
+            setStep(2);
+        } finally {
+            setIsEvaluatingBase(false);
+        }
     };
 
     const handleProfileSubmit = async (formData: Record<string, any>) => {
@@ -156,34 +213,46 @@ const CreateUser: React.FC = () => {
                                 options: ["ADMIN", "STUDENT", "TEACHER"]
                             }
                         ]}
-                        buttonLabel="Continuar al Perfil ➔"
+                        buttonLabel={isEvaluatingBase ? "Evaluando..." : "Evaluar y continuar ➔"}
                         onSubmit={handleBaseSubmit}
                     />
                 )}
 
                 {step === 2 && (
-                    <GenericForm
-                        fields={[
-                            { name: "first_name", label: "Nombre(s)", type: "text" },
-                            { name: "last_name", label: "Apellido(s)", type: "text" },
-                            { name: "identification", label: "Identificación (DNI/Cédula)", type: "text" },
+                    <div className="space-y-4">
+                        <GenericForm
+                            fields={[
+                                { name: "first_name", label: "Nombre(s)", type: "text" },
+                                { name: "last_name", label: "Apellido(s)", type: "text" },
+                                { name: "identification", label: "Identificación (DNI/Cédula)", type: "text" },
 
-                            ...(baseUserData.role === "TEACHER"
-                                ? [
-                                    { name: "phone", label: "Número de Contacto", type: "text" },
-                                    { name: "specialty", label: "Especialidad Académica", type: "text" }
-                                ]
-                                : [])
-                        ]}
-                        buttonLabel={
-                            baseUserData.role === "STUDENT"
-                                ? "Finalizar y Registrar Estudiante"
-                                : baseUserData.role === "ADMIN"
-                                    ? "Finalizar y Registrar Administrador"
-                                    : "Finalizar y Registrar Docente"
-                        }
-                        onSubmit={handleProfileSubmit}
-                    />
+                                ...(baseUserData.role === "TEACHER"
+                                    ? [
+                                        { name: "phone", label: "Número de Contacto", type: "text" },
+                                        { name: "specialty", label: "Especialidad Académica", type: "text" }
+                                    ]
+                                    : [])
+                            ]}
+                            buttonLabel={
+                                baseUserData.role === "STUDENT"
+                                    ? "Finalizar y Registrar Estudiante"
+                                    : baseUserData.role === "ADMIN"
+                                        ? "Finalizar y Registrar Administrador"
+                                        : "Finalizar y Registrar Docente"
+                            }
+                            onSubmit={handleProfileSubmit}
+                        />
+
+                        <div className="flex justify-start">
+                            <button
+                                type="button"
+                                onClick={handleBackToBase}
+                                className="rounded-md border border-slate-300 bg-white px-5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                            >
+                                ← Volver a la zona 1
+                            </button>
+                        </div>
+                    </div>
                 )}
 
             </div>
