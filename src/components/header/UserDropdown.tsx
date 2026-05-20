@@ -13,7 +13,7 @@ const UserDropdown = () => {
 
   const user = useSelector((state: RootState) => state.user.user);
   const dispatch = useDispatch();
-  const navigate = useNavigate(); // ✅ IMPORTANTE
+  const navigate = useNavigate();
 
   const [fullName, setFullName] = useState<string>("Usuario");
 
@@ -21,29 +21,96 @@ const UserDropdown = () => {
   const dropdown = useRef<HTMLDivElement>(null);
 
   // ================================
-  // NOMBRE REAL
+  // CARGAR NOMBRE REAL SEGÚN ROL
   // ================================
   useEffect(() => {
     const loadName = async () => {
-      if (!user?.id) return;
+      try {
+        if (!user?.id) return;
 
-      const role = (user.role || "").toUpperCase();
+        const role = (user.role || "").toUpperCase();
 
-      if (role === "STUDENT") {
-        const students = await userService.getStudents();
-        const student = students.find((s) => s.user_id === user.id);
+        // ================================
+        // STUDENT
+        // ================================
+        if (role === "STUDENT") {
+          const students = await userService.getStudents();
 
-        if (student) {
-          setFullName(`${student.first_name} ${student.last_name}`);
+          const student = students.find(
+            (s: any) =>
+              s.user_id === user.id ||
+              s.id === user.id ||
+              s.email === user.email
+          );
+
+          if (student) {
+            setFullName(
+              `${student.first_name || ""} ${student.last_name || ""}`.trim()
+            );
+            return;
+          }
         }
-      }
 
-      if (role === "TEACHER") {
-        const teachers = await userService.getTeachers();
-        const teacher = teachers.find((t) => t.user_id === user.id);
+        // ================================
+        // TEACHER
+        // ================================
+        if (role === "TEACHER") {
+          const teachers = await userService.getTeachers();
 
-        if (teacher) {
-          setFullName(`${teacher.first_name} ${teacher.last_name}`);
+          const teacher = teachers.find(
+            (t: any) =>
+              t.user_id === user.id ||
+              t.id === user.id ||
+              t.email === user.email
+          );
+
+          if (teacher) {
+            setFullName(
+              `${teacher.first_name || ""} ${teacher.last_name || ""}`.trim()
+            );
+            return;
+          }
+        }
+
+        // ================================
+        // ADMIN
+        // ================================
+        if (role === "ADMIN") {
+          // Intentar usar nombre del usuario directamente
+          if ((user as any).first_name || (user as any).last_name) {
+            setFullName(
+              `${(user as any).first_name || ""} ${
+                (user as any).last_name || ""
+              }`.trim()
+            );
+            return;
+          }
+
+          // Intentar usar propiedad name
+          if ((user as any).name) {
+            setFullName((user as any).name);
+            return;
+          }
+
+          // Fallback con email
+          if (user.email) {
+            const emailName = user.email.split("@")[0];
+            setFullName(emailName);
+            return;
+          }
+        }
+
+        // ================================
+        // FALLBACK GENERAL
+        // ================================
+        if (user.email) {
+          setFullName(user.email.split("@")[0]);
+        }
+      } catch (error) {
+        console.error("Error cargando nombre:", error);
+
+        if (user?.email) {
+          setFullName(user.email.split("@")[0]);
         }
       }
     };
@@ -52,7 +119,7 @@ const UserDropdown = () => {
   }, [user]);
 
   // ================================
-  // CLICK OUTSIDE
+  // CLICK FUERA DEL DROPDOWN
   // ================================
   useEffect(() => {
     const handler = (event: MouseEvent) => {
@@ -63,36 +130,44 @@ const UserDropdown = () => {
       if (
         dropdown.current.contains(target) ||
         trigger.current.contains(target)
-      ) return;
+      ) {
+        return;
+      }
 
       setDropdownOpen(false);
     };
 
     document.addEventListener("click", handler);
+
     return () => document.removeEventListener("click", handler);
   }, []);
 
   // ================================
-  // ESC
+  // ESC PARA CERRAR
   // ================================
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDropdownOpen(false);
+      if (e.key === "Escape") {
+        setDropdownOpen(false);
+      }
     };
 
     document.addEventListener("keydown", handler);
+
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
   // ================================
-  // LOGOUT (CORREGIDO)
+  // LOGOUT
   // ================================
   const handleLogout = () => {
     SecurityService.logout();
+
     dispatch(clearUser());
+
     setDropdownOpen(false);
 
-    navigate("/signin"); // ✅ REDIRECCIÓN AQUÍ
+    navigate("/signin");
   };
 
   const firstLetter = fullName.charAt(0).toUpperCase();
@@ -104,10 +179,12 @@ const UserDropdown = () => {
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className="flex items-center text-gray-700 dark:text-gray-400"
       >
+        {/* Avatar */}
         <span className="mr-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-500 text-white font-bold uppercase">
           {firstLetter || "U"}
         </span>
 
+        {/* Nombre */}
         <span className="hidden lg:block text-left">
           <span className="block font-medium text-black dark:text-white">
             {fullName}
@@ -119,22 +196,31 @@ const UserDropdown = () => {
         </span>
       </button>
 
+      {/* Dropdown */}
       <div
         ref={dropdown}
-        className={`absolute right-0 mt-4 w-[260px] rounded-2xl border bg-white p-3 shadow-lg dark:bg-gray-900 ${
+        className={`absolute right-0 mt-4 w-[260px] rounded-2xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-900 ${
           dropdownOpen ? "block" : "hidden"
         }`}
       >
-        <div className="pb-3 border-b">
-          <p className="font-medium">{fullName}</p>
+        {/* Header */}
+        <div className="border-b border-gray-200 pb-3 dark:border-gray-700">
+          <p className="font-medium text-black dark:text-white">
+            {fullName}
+          </p>
+
+          <p className="text-sm text-gray-500">
+            {user?.email}
+          </p>
         </div>
 
-        <ul className="pt-3 pb-3 border-b">
+        {/* Links */}
+        <ul className="border-b border-gray-200 py-3 dark:border-gray-700">
           <li>
             <Link
               to="/profile"
               onClick={() => setDropdownOpen(false)}
-              className="block px-3 py-2 hover:bg-gray-100 rounded-lg"
+              className="block rounded-lg px-3 py-2 transition hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               Mi perfil
             </Link>
@@ -144,16 +230,17 @@ const UserDropdown = () => {
             <Link
               to="/settings"
               onClick={() => setDropdownOpen(false)}
-              className="block px-3 py-2 hover:bg-gray-100 rounded-lg"
+              className="block rounded-lg px-3 py-2 transition hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               Configuración
             </Link>
           </li>
         </ul>
 
+        {/* Logout */}
         <button
           onClick={handleLogout}
-          className="w-full text-left px-3 py-2 mt-2 text-red-500 hover:bg-gray-100 rounded-lg"
+          className="mt-2 w-full rounded-lg px-3 py-2 text-left text-red-500 transition hover:bg-gray-100 dark:hover:bg-gray-800"
         >
           Cerrar sesión
         </button>
